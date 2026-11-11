@@ -18,6 +18,8 @@ nas reservas e na importação. A lista fica em `banco.py` (`MEUS_LOCAIS`) e pod
 
 | Tela | Para que serve | No CMAP equivale a |
 |---|---|---|
+| **O que subir** | Forecast × o que está no CMAP, por reserva (MAS + local) e mês: ▲ aumentar, ▼ reduzir, reservas novas. Botão **✔ Lançado no CMAP** atualiza o controle e registra o lançamento. | — |
+| **Frentes** | De-para LOB WFM → MAS (Project ID), preenchido uma vez (pode vir do controle antigo). | — |
 | **Painel** | Ocupação por cidade e local, mês a mês: Res, Avai, % (mesma conta da planilha), com subtotal por cidade. Negativo em vermelho. | Aba *Summary* da planilha |
 | **Ver reserva** | Lista de reservas com filtro em cada coluna, “Cópia” e “Mostrar tudo”. | *Ver reserva* |
 | **Reserva → Perfil** | Resv. Desc., ID/nome do projeto, cliente, local e status. | aba *Perfil* |
@@ -83,7 +85,29 @@ E abra no navegador: **http://127.0.0.1:5000**. Para parar, `Ctrl + C` no termin
 
 ---
 
-## Rotina sugerida (reunião de segunda)
+## Regras do cálculo (forecast → CMAP)
+
+Do **FORECAST OFICIAL** (aba `BASE`) usamos, por frente e mês: a carga (**6H20** ou **7H12**), o **MOP**,
+Home manhã/tarde e Staff incompany/home.
+
+| O quê | Regra |
+|---|---|
+| PAs no prédio (PRODUCAGENT-DIR) | (MOP − Home) ÷ **2** nas frentes 6H20; ÷ **1** nas integrais (7H12) |
+| Home office | reserva separada em *WAH Brasil Direto WFH* (`_HO`) com o Home |
+| Staff (TEAMLEADER-DIR) | Staff incompany no prédio; Staff home na reserva `_HO` |
+| Arredondamento | **sempre para cima**, depois de somar tudo do mesmo MAS + local |
+
+O endereço do forecast vira o Location ID do CMAP pelo nome (ex.: “Curitiba Marechal 3” → `BR-CUR-MALDE-02`;
+andar “HOME OFFICE” → `BR-WFH-DIRETO`). Avisos da importação mostram frentes sem 6H20/7H12, FATOR PA do
+arquivo diferente da regra e endereços não reconhecidos.
+
+## Rotina sugerida
+
+1. **Importar** o forecast novo (e, se quiser conferir, o relatório do CMAP).
+2. **O que subir**: para cada reserva com ▲/▼, lance no CMAP e clique **✔ Lançado no CMAP**.
+3. Frentes novas sem MAS aparecem em alerta → preencha em **Frentes**.
+
+## Conferência com a planilha de capacidade (reunião de segunda)
 
 1. No CMAP, exporte o relatório de reservas (o mesmo da aba *12 month forecast*).
 2. No controle: **Importar** → escolha o arquivo.

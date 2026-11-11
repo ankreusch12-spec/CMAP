@@ -149,3 +149,15 @@ input.qtd { width: 64px; text-align: right; }
 .painel tr.subtotal td { font-weight: 700; border-bottom: 2px solid var(--borda); }
 details.outros { margin-top: 20px; }
 details.outros summary { cursor: pointer; color: var(--suave); }
+
+/* "O que subir": um cartão por reserva */
+.cartao { border: 1px solid var(--borda); border-radius: 6px; padding: 12px; margin: 12px 0; }
+.cartao.sem-mudanca { opacity: .75; }
+.cartao-topo { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.comparacao td, .comparacao th { padding: 3px 6px; font-size: 13px; white-space: nowrap; }
+.comparacao tr.no-cmap td { color: var(--suave); }
+.comparacao td.sobe { background: var(--ok); color: var(--ok-texto); font-weight: 700; }
+.comparacao td.desce { background: var(--negativo); color: var(--negativo-texto); font-weight: 700; }
+.status-nova { background: var(--cabecalho); }
+tr.falta td:first-child { border-left: 3px solid var(--negativo-texto); }
+td.detalhe { font-size: 12px; max-width: 520px; }

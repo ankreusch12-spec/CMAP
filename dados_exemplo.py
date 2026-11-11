@@ -11,7 +11,9 @@ dados_exemplo.py — carrega dados FICTÍCIOS para testar o controle.
 from datetime import date
 
 import banco
+import forecast
 import meses
+import subir
 from app import criar_app
 
 # (Location ID, Site ID, Descrição, capacidade fictícia)
@@ -48,6 +50,33 @@ RESERVAS = [
 ]
 
 
+# Forecast fictício: (LOB, conta, endereço, andar, carga, MOP, home, staff, MAS, crescimento/mês)
+FORECAST = [
+    ("LOB EXEMPLO A", "CLIENTE_A", "Ponta Grossa Brazil-Rua Sete de Setembro", "3ª", "7H12", 27, 0, 1, "EXEMPLO001", 0),
+    ("LOB EXEMPLO B", "CLIENTE_B", "Curitiba Marechal 2", "3ª", "6H20", 260, 20, 6, "EXEMPLO002", 0),
+    ("LOB EXEMPLO F", "CLIENTE_F", "Curitiba Jose Loureiro 2", "3ª", "7H12", 1300, 0, 60, "EXEMPLO005", 4),
+    ("LOB EXEMPLO J", "CLIENTE_J", "Curitiba Jose Loureiro 1", "1ª", "6H20", 81, 0, 3, "EXEMPLO009", 0),
+    ("LOB SEM MAS", "CLIENTE_K", "Sao Paulo - Rua Tagipuru", "TORRE A - 2ª", "7H12", 40, 0, 2, "", 0),
+]
+
+
+def carregar_forecast(janela):
+    frentes = []
+    for lob, conta, end, andar, carga, mop, home, staff, mas, cresce in FORECAST:
+        frentes.append({
+            "lob": lob, "act_id": "W0EXEMP", "conta": conta, "endereco": end, "andar": andar,
+            "location_id": forecast.local_do_endereco(end, andar),
+            "carga": carga, "fator": 2 if carga == "6H20" else 1,
+            "valores": {m.chave: {"mop": mop + cresce * i, "home": home, "staff_ic": staff,
+                                  "staff_ho": 0} for i, m in enumerate(janela)}})
+    subir.salvar_forecast(frentes, ["Exemplo de aviso: FATOR PA diferente da regra."],
+                          "FORECAST_EXEMPLO.xlsx")
+    con = banco.db()
+    for lob, conta, *_, mas, _c in FORECAST:
+        con.execute("UPDATE frentes SET project_id = ?, cliente = ? WHERE lob = ?", (mas, conta, lob))
+    con.commit()
+
+
 def carregar():
     app = criar_app()
     with app.app_context():
@@ -73,6 +102,7 @@ def carregar():
                     con.execute("""INSERT INTO assentos (reserva_id, dept_code, dept_name, shift, mes, qtd)
                                    VALUES (?, ?, ?, 'DED', ?, ?)""",
                                 (cur.lastrowid, dept, nome_dept, m.chave, qtd))
+        carregar_forecast(janela)
         banco.registrar("Dados de exemplo carregados", "", con)
         con.commit()
     print("Dados de exemplo carregados. Rode: python app.py")

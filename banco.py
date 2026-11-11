@@ -35,12 +35,14 @@ MEUS_LOCAIS = {
     "BR-CUR-MALDE-01",  # Curitiba — Marechal 2
     "BR-CUR-MALDE-02",  # Curitiba — Marechal 3
     "BR-PON-RUASE",     # Ponta Grossa
+    "BR-WFH-DIRETO",    # WAH Brasil Direto WFH (reservas _HO do home office)
 }
 
 # Cidade de cada local, pelo pedaço do meio do código (BR-CUR-... = Curitiba).
 # A ordem aqui é a ordem dos grupos no painel.
-CIDADES = {"SAO": "São Paulo", "BAR": "São Paulo", "CUR": "Curitiba", "PON": "Ponta Grossa"}
-ORDEM_CIDADES = ["São Paulo", "Curitiba", "Ponta Grossa"]
+CIDADES = {"SAO": "São Paulo", "BAR": "São Paulo", "CUR": "Curitiba", "PON": "Ponta Grossa",
+           "WFH": "Home Office"}
+ORDEM_CIDADES = ["São Paulo", "Curitiba", "Ponta Grossa", "Home Office"]
 
 
 def cidade(location_id: str) -> str:
@@ -76,6 +78,49 @@ CREATE TABLE IF NOT EXISTS assentos (
     mes         TEXT NOT NULL,              -- AAAA-MM
     qtd         INTEGER NOT NULL CHECK (qtd >= 0),
     PRIMARY KEY (reserva_id, dept_code, shift, mes)
+);
+
+-- De-para das frentes do forecast: LOB WFM -> MAS (Project ID do CMAP).
+CREATE TABLE IF NOT EXISTS frentes (
+    lob           TEXT PRIMARY KEY,         -- LOB WFM, como vem no forecast
+    act_id        TEXT NOT NULL DEFAULT '',
+    conta         TEXT NOT NULL DEFAULT '',
+    project_id    TEXT NOT NULL DEFAULT '', -- MAS, ex.: WHBRASIL006
+    project_name  TEXT NOT NULL DEFAULT '',
+    cliente       TEXT NOT NULL DEFAULT ''
+);
+
+-- Último forecast importado (uma linha por frente, local e mês).
+CREATE TABLE IF NOT EXISTS forecast (
+    lob          TEXT NOT NULL,
+    endereco     TEXT NOT NULL,
+    andar        TEXT NOT NULL,
+    location_id  TEXT,                       -- NULL = endereço não reconhecido
+    carga        TEXT,                       -- 6H20 ou 7H12
+    fator        INTEGER NOT NULL,
+    mes          TEXT NOT NULL,
+    mop          REAL NOT NULL,
+    home         REAL NOT NULL,
+    staff_ic     REAL NOT NULL,
+    staff_ho     REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS forecast_info (
+    id            INTEGER PRIMARY KEY CHECK (id = 1),
+    arquivo       TEXT NOT NULL,
+    importado_em  TEXT NOT NULL,
+    quem          TEXT NOT NULL,
+    avisos        TEXT NOT NULL DEFAULT ''
+);
+
+-- Cada vez que você marca "Lançado no CMAP".
+CREATE TABLE IF NOT EXISTS lancamentos (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    quando       TEXT NOT NULL,
+    quem         TEXT NOT NULL,
+    resv_desc    TEXT NOT NULL,
+    project_id   TEXT NOT NULL,
+    location_id  TEXT NOT NULL,
+    detalhe      TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS historico (

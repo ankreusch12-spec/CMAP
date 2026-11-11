@@ -1,7 +1,23 @@
 {% extends "base.html" %}
 {% block titulo %}Importar{% endblock %}
 {% block conteudo %}
-<h1>Importar relatório do CMAP</h1>
+<h1>Importar</h1>
+
+<h2>1. Forecast oficial (MOP)</h2>
+<p class="ajuda">
+  Envie o <b>FORECAST OFICIAL - OUTBOUND</b>. O controle lê a aba <code>BASE</code> (MOP, Home, Staff
+  e a carga 6H20/7H12 de cada frente), substitui o forecast anterior e mostra em
+  <a href="{{ url_for('o_que_subir') }}">O que subir</a> a diferença para o que está no CMAP.
+</p>
+<form method="post" action="{{ url_for('importar_forecast') }}" enctype="multipart/form-data" class="formulario">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Arquivo do forecast (.xlsx, até 20 MB)
+    <input type="file" name="arquivo" accept=".xlsx" required>
+  </label>
+  <div class="acoes"><button class="botao">Importar forecast</button></div>
+</form>
+
+<h2>2. Relatório do CMAP (o que já está lançado)</h2>
 <p class="ajuda">
   Envie o Excel exportado do CMAP (o mesmo que alimenta a aba <i>12 month forecast</i>)
   ou um arquivo gerado por <b>Exportar Excel</b> deste controle.
@@ -10,18 +26,18 @@
   <code>Country · Location ID · Site ID · Site · Client · Project ID · Project · Dept · Shift · Eff Date · Qty</code>
 </p>
 <ul class="ajuda">
-  <li>Só entram os <b>locais que você acompanha</b> (São Paulo BF4 e Barueri, Curitiba JL1/JL2/JL3/MAL2/MAL3
-    e Ponta Grossa). Linhas de outros locais e de outros países são ignoradas.
+  <li>Só entram os <b>locais que você acompanha</b> (São Paulo BF4 e Barueri, Curitiba JL1/JL2/JL3/MAL2/MAL3,
+    Ponta Grossa e WAH Brasil Direto WFH). Linhas de outros locais e de outros países são ignoradas.
     Para mudar a lista, use a coluna “Acompanho” em <a href="{{ url_for('locais') }}">Locais</a>.</li>
   <li>Reservas são reconhecidas por <b>Project ID + Location ID</b>; as quantidades do arquivo substituem as atuais.</li>
-  <li>O arquivo é lido e descartado: só os dados ficam no banco local do seu PC.</li>
 </ul>
-
 <form method="post" enctype="multipart/form-data" class="formulario">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <label>Arquivo (.xlsx, até 20 MB)
+  <label>Relatório do CMAP (.xlsx, até 20 MB)
     <input type="file" name="arquivo" accept=".xlsx" required>
   </label>
-  <div class="acoes"><button class="botao">Importar</button></div>
+  <div class="acoes"><button class="botao">Importar relatório</button></div>
 </form>
+
+<p class="ajuda">🔒 Os arquivos são lidos e descartados: só os números ficam no banco local do seu PC.</p>
 {% endblock %}

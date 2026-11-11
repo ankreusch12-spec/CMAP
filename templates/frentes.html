@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block titulo %}Frentes{% endblock %}
+{% block conteudo %}
+<h1>Frentes do forecast (de-para LOB → MAS)</h1>
+<p class="ajuda">
+  O forecast não traz o MAS do CMAP (<code>WHBRASIL…</code>). Preencha uma vez por frente; as frentes
+  sem MAS ficam fora do “O que subir”. As frentes aparecem aqui depois de importar o forecast.
+</p>
+
+<form method="post" action="{{ url_for('importar_de_para') }}" enctype="multipart/form-data" class="formulario linha">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Preencher pelo controle antigo (aba com colunas LOB WFM e MAS)
+    <input type="file" name="arquivo" accept=".xlsx" required>
+  </label>
+  <button class="botao claro">Preencher MAS vazios</button>
+</form>
+
+<table class="grade lista" data-filtravel>
+  <thead>
+    <tr><th>LOB WFM</th><th>Conta</th><th>Act ID</th><th>Endereço</th><th>MAS (Project ID)</th><th>Nome do projeto</th><th>Cliente</th><th></th></tr>
+    <tr class="filtros">
+      {% for c in range(4) %}<th><input data-filtro="{{ c }}" aria-label="Filtrar coluna {{ c }}"></th>{% endfor %}
+      <th></th><th></th><th></th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in frentes %}
+    {% set id = 'fr' ~ loop.index %}
+    <tr class="{{ 'falta' if not f.project_id }}">
+      <td>{{ f.lob }}</td>
+      <td>{{ f.conta }}</td>
+      <td class="codigo">{{ f.act_id }}</td>
+      <td class="ajuda">{{ f.enderecos or '' }}</td>
+      <td><input form="{{ id }}" name="project_id" value="{{ f.project_id }}" maxlength="40" placeholder="WHBRASIL000" class="codigo"></td>
+      <td><input form="{{ id }}" name="project_name" value="{{ f.project_name }}" maxlength="120" placeholder="P_CLIENTE_CWB"></td>
+      <td><input form="{{ id }}" name="cliente" value="{{ f.cliente }}" maxlength="120" class="curto"></td>
+      <td>
+        <form id="{{ id }}" method="post" action="{{ url_for('salvar_frente') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="lob" value="{{ f.lob }}">
+          <button class="botao pequeno">Salvar</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="vazio">Importe o forecast para ver as frentes.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

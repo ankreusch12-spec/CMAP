@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block titulo %}O que subir{% endblock %}
+{% block conteudo %}
+<h1>O que subir no CMAP</h1>
+
+{% if not info %}
+  <div class="vazio">
+    Nenhum forecast importado ainda. Vá em <a href="{{ url_for('importar') }}">Importar</a>
+    e envie o <b>FORECAST OFICIAL</b>.
+  </div>
+{% else %}
+<p class="ajuda">
+  Forecast: <b>{{ info.arquivo }}</b> · importado em {{ info.importado_em }} por {{ info.quem }}.<br>
+  Regra: PAs no prédio = (MOP − Home) ÷ 2 nas frentes <b>6H20</b> e ÷ 1 nas integrais, somado por
+  MAS + local e <b>arredondado para cima</b>. Home vai para <i>WAH Brasil Direto WFH</i> (_HO).
+  Staff entra como <b>TEAMLEADER-DIR</b>.
+</p>
+
+{% if sem_mas %}
+  <div class="aviso aviso-erro">
+    {{ sem_mas|length }} frente(s) do forecast sem MAS — elas ficam fora da conta.
+    <a href="{{ url_for('frentes') }}">Preencher em Frentes</a>.
+  </div>
+{% endif %}
+
+<div class="barra">
+  <span class="barra-titulo">{{ pendentes }} de {{ total }} reserva(s) com mudança</span>
+  {% if tudo %}
+    <a class="botao claro" href="{{ url_for('o_que_subir') }}">Só o que muda</a>
+  {% else %}
+    <a class="botao claro" href="{{ url_for('o_que_subir', tudo=1) }}">Mostrar tudo</a>
+  {% endif %}
+</div>
+
+{% for i in itens %}
+<section class="cartao {{ 'sem-mudanca' if not i.muda }}">
+  <div class="cartao-topo">
+    <div>
+      <b>{{ i.resv_desc }}</b>
+      {% if not i.reserva %}<span class="status status-nova">nova no CMAP</span>{% endif %}
+      {% if not i.muda %}<span class="status status-confirmado">em dia</span>{% endif %}
+      <div class="ajuda">
+        {{ i.project_id }}-{{ i.project_name }} ·
+        {{ i.local.site_id ~ '(' if i.local and i.local.site_id }}{{ i.location_id }}{{ ')' if i.local and i.local.site_id }}
+        {{ i.local.descricao if i.local }}<br>
+        Frentes: {{ i.lobs|join(' · ') }}
+      </div>
+    </div>
+    {% if i.muda %}
+    <form method="post" action="{{ url_for('lancar') }}"
+          data-confirmar="Confirma que {{ i.resv_desc }} já foi lançado no CMAP com esses números?">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="project_id" value="{{ i.project_id }}">
+      <input type="hidden" name="location_id" value="{{ i.location_id }}">
+      <button class="botao">✔ Lançado no CMAP</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="rolagem">
+  <table class="grade comparacao">
+    <thead>
+      <tr>
+        <th></th>
+        {% for l in i.meses %}<th class="{{ 'restrito' if restrito(l.mes) }}">{{ l.mes.rotulo }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for rotulo, atual, novo in [('PRODUCAGENT-DIR', 'ag_atual', 'ag_novo'), ('TEAMLEADER-DIR', 'st_atual', 'st_novo')] %}
+      <tr class="no-cmap">
+        <td>{{ rotulo }} <span class="ajuda">no CMAP</span></td>
+        {% for l in i.meses %}<td class="num">{{ l[atual] }}</td>{% endfor %}
+      </tr>
+      <tr>
+        <td>{{ rotulo }} <span class="ajuda">forecast</span></td>
+        {% for l in i.meses %}
+          {% set d = l[novo] - l[atual] %}
+          <td class="num {{ 'sobe' if d > 0 else 'desce' if d < 0 }}">
+            {{ l[novo] }}{% if d %} <small>{{ '▲' if d > 0 else '▼' }}{{ d|abs }}</small>{% endif %}
+          </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% else %}
+  <div class="vazio">Tudo em dia: o controle está igual ao forecast. 🎉</div>
+{% endfor %}
+
+{% if info.avisos %}
+<details class="outros">
+  <summary>Avisos da importação ({{ info.avisos.split('\n')|length }})</summary>
+  <ul class="ajuda">{% for a in info.avisos.split('\n') %}<li>{{ a }}</li>{% endfor %}</ul>
+</details>
+{% endif %}
+{% endif %}
+
+<h2>Últimos lançamentos</h2>
+<table class="grade lista" data-filtravel>
+  <thead>
+    <tr><th>Quando</th><th>Quem</th><th>Resv. Desc.</th><th>MAS</th><th>Local</th><th>O que mudou</th></tr>
+    <tr class="filtros">{% for c in range(6) %}<th><input data-filtro="{{ c }}" aria-label="Filtrar coluna {{ c }}"></th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+    {% for l in lancamentos %}
+    <tr><td>{{ l.quando }}</td><td>{{ l.quem }}</td><td>{{ l.resv_desc }}</td><td>{{ l.project_id }}</td>
+        <td>{{ l.location_id }}</td><td class="detalhe">{{ l.detalhe }}</td></tr>
+    {% else %}
+    <tr><td colspan="6" class="vazio">Nenhum lançamento registrado ainda.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

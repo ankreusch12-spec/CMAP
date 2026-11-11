@@ -9,6 +9,8 @@ e abrir no navegador:  http://127.0.0.1:5000
 Mapa do código:
     app.py        -> as páginas (rotas) e o que cada uma faz   <- você está aqui
     banco.py      -> banco de dados (SQLite) e consultas
+    forecast.py   -> lê o FORECAST OFICIAL e aplica as regras (6H20 ÷ 2, arredonda p/ cima)
+    subir.py      -> "O que subir no CMAP": forecast × controle e os lançamentos
     planilhas.py  -> importar / exportar Excel no formato do CMAP
     meses.py      -> janela de 12 meses (Nov-2026 ... Oct-2027)
     seguranca.py  -> proteções (CSRF, só acesso local, cabeçalhos)
@@ -23,9 +25,11 @@ from flask import (Flask, abort, flash, redirect, render_template, request,
                    send_file, url_for)
 
 import banco
+import forecast
 import meses
 import planilhas
 import seguranca
+import subir
 
 # Regras simples para validar o que é digitado.
 RE_CODIGO = re.compile(r"^[A-Z0-9][A-Z0-9_\-]{0,39}$")     # Dept Code, Shift, IDs
@@ -233,14 +237,9 @@ def registrar_rotas(app: Flask):
 
     @app.post("/importar")
     def receber_importacao():
-        arquivo = request.files.get("arquivo")
-        if not arquivo or not arquivo.filename.lower().endswith(".xlsx"):
-            flash("Escolha um arquivo .xlsx.", "erro")
+        arquivo = arquivo_xlsx()
+        if not arquivo:
             return redirect(url_for("importar"))
-        if arquivo.stream.read(2) != b"PK":                # todo .xlsx começa com "PK"
-            flash("O arquivo não parece ser um Excel (.xlsx) válido.", "erro")
-            return redirect(url_for("importar"))
-        arquivo.stream.seek(0)
         try:
             linhas, avisos = planilhas.ler(arquivo.stream)
         except planilhas.ErroPlanilha as erro:
@@ -266,6 +265,100 @@ def registrar_rotas(app: Flask):
                          mimetype="application/vnd.openxmlformats-officedocument."
                                   "spreadsheetml.sheet")
 
+    @app.post("/importar/forecast")
+    def importar_forecast():
+        arquivo = arquivo_xlsx()
+        if not arquivo:
+            return redirect(url_for("importar"))
+        try:
+            frentes, avisos = forecast.ler(arquivo.stream)
+        except forecast.ErroForecast as erro:
+            flash(str(erro), "erro")
+            return redirect(url_for("importar"))
+        subir.salvar_forecast(frentes, avisos, arquivo.filename)
+        flash(f"Forecast importado: {len(frentes)} frentes.", "ok")
+        return redirect(url_for("o_que_subir"))
+
+    # ------------------------------------------------------------ O QUE SUBIR
+    @app.get("/subir")
+    def o_que_subir():
+        janela = meses.janela()
+        tudo = request.args.get("tudo") == "1"
+        lista = subir.itens(janela)
+        return render_template("subir.html", janela=janela, tudo=tudo,
+                               itens=lista if tudo else [i for i in lista if i["muda"]],
+                               total=len(lista), pendentes=sum(i["muda"] for i in lista),
+                               sem_mas=subir.pendencias_de_para(), info=subir.info_forecast(),
+                               lancamentos=subir.lancamentos())
+
+    @app.post("/subir/lancar")
+    def lancar():
+        try:
+            project_id = codigo("project_id")
+            location_id = texto("location_id")
+        except ValueError as erro:
+            flash(str(erro), "erro")
+            return redirect(url_for("o_que_subir"))
+        feito = subir.lancar(project_id, location_id, meses.janela())
+        if feito:
+            flash(f"{feito}: lançamento registrado e controle atualizado.", "ok")
+        else:
+            flash("Nada para lançar nessa reserva (já está igual ao forecast).", "erro")
+        return redirect(url_for("o_que_subir"))
+
+    # ------------------------------------------------------------ FRENTES (de-para LOB -> MAS)
+    @app.get("/frentes")
+    def frentes():
+        lista = banco.db().execute(
+            """SELECT fr.*, (SELECT group_concat(DISTINCT f.endereco || ' ' || f.andar)
+                             FROM forecast f WHERE f.lob = fr.lob) AS enderecos
+               FROM frentes fr ORDER BY fr.project_id != '', fr.conta, fr.lob""").fetchall()
+        return render_template("frentes.html", frentes=lista)
+
+    @app.post("/frentes")
+    def salvar_frente():
+        try:
+            lob = texto("lob")
+            mas = request.form.get("project_id", "").strip().upper()
+            if mas and not RE_CODIGO.match(mas):
+                raise ValueError("MAS aceita só letras, números, - e _ (ex.: WHBRASIL006).")
+            nome = texto("project_name", obrigatorio=False)
+            cliente = texto("cliente", obrigatorio=False).upper()
+        except ValueError as erro:
+            flash(str(erro), "erro")
+            return redirect(url_for("frentes"))
+        con = banco.db()
+        if not con.execute("UPDATE frentes SET project_id = ?, project_name = ?, cliente = ? "
+                           "WHERE lob = ?", (mas, nome, cliente, lob)).rowcount:
+            abort(404)
+        banco.registrar("De-para alterado", f"{lob} → {mas or '(sem MAS)'}")
+        con.commit()
+        flash(f"Frente {lob} salva.", "ok")
+        return redirect(url_for("frentes"))
+
+    @app.post("/frentes/importar")
+    def importar_de_para():
+        arquivo = arquivo_xlsx()
+        if not arquivo:
+            return redirect(url_for("frentes"))
+        try:
+            achados = forecast.ler_de_para(arquivo.stream)
+        except forecast.ErroForecast as erro:
+            flash(str(erro), "erro")
+            return redirect(url_for("frentes"))
+        con = banco.db()
+        preenchidas = 0
+        for lob, dp in achados.items():
+            # só preenche o que está vazio: não apaga o que você já digitou
+            preenchidas += con.execute(
+                """UPDATE frentes SET project_id = ?, cliente = CASE WHEN cliente = '' THEN ?
+                   ELSE cliente END WHERE lob = ? AND project_id = ''""",
+                (dp["project_id"], dp["cliente"].upper()[:LIMITE_TEXTO], lob)).rowcount
+        banco.registrar("De-para importado", f"{preenchidas} frentes preenchidas")
+        con.commit()
+        flash(f"{preenchidas} frente(s) receberam o MAS do arquivo.", "ok")
+        return redirect(url_for("frentes"))
+
     # ------------------------------------------------------------ HISTÓRICO
     @app.get("/historico")
     def historico():
@@ -273,6 +366,19 @@ def registrar_rotas(app: Flask):
 
 
 # ---------------------------------------------------------------- leitura de formulários
+
+def arquivo_xlsx():
+    """Confere o upload: tem que ser .xlsx de verdade. Se não for, avisa e devolve None."""
+    arquivo = request.files.get("arquivo")
+    if not arquivo or not arquivo.filename.lower().endswith(".xlsx"):
+        flash("Escolha um arquivo .xlsx.", "erro")
+        return None
+    if arquivo.stream.read(2) != b"PK":                # todo .xlsx começa com "PK"
+        flash("O arquivo não parece ser um Excel (.xlsx) válido.", "erro")
+        return None
+    arquivo.stream.seek(0)
+    return arquivo
+
 
 def ler_perfil():
     """Campos da aba Perfil, já validados, na ordem das colunas do banco."""
