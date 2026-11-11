@@ -4,6 +4,11 @@ Página web **local** para organizar as reservas de assentos no **mesmo padrão 
 os mesmos campos, os mesmos códigos de local e a mesma grade de 12 meses. Assim, o que está no
 controle bate com o que é lançado no CMAP e com a planilha da reunião de segunda.
 
+**Locais acompanhados:** São Paulo (BF4 Tagipuru e Barueri), Curitiba (JL1, JL2, JL3, Marechal 2 e
+Marechal 3) e Ponta Grossa. Os demais locais do CMAP (Fortaleza, EZ Tower...) são ignorados no painel,
+nas reservas e na importação. A lista fica em `banco.py` (`MEUS_LOCAIS`) e pode ser ajustada na tela
+**Locais**, na coluna “Acompanho”.
+
 > 🔒 **Os dados ficam só no seu PC.** Este repositório guarda apenas o **código**.
 > Planilhas, exports e o banco de dados são bloqueados pelo `.gitignore`. Veja [SEGURANCA.md](SEGURANCA.md).
 
@@ -13,7 +18,7 @@ controle bate com o que é lançado no CMAP e com a planilha da reunião de segu
 
 | Tela | Para que serve | No CMAP equivale a |
 |---|---|---|
-| **Painel** | Ocupação por local e mês: Res, Avai, % (mesma conta da planilha). Negativo em vermelho. | Aba *Summary* da planilha |
+| **Painel** | Ocupação por cidade e local, mês a mês: Res, Avai, % (mesma conta da planilha), com subtotal por cidade. Negativo em vermelho. | Aba *Summary* da planilha |
 | **Ver reserva** | Lista de reservas com filtro em cada coluna, “Cópia” e “Mostrar tudo”. | *Ver reserva* |
 | **Reserva → Perfil** | Resv. Desc., ID/nome do projeto, cliente, local e status. | aba *Perfil* |
 | **Reserva → Assentos** | Grade Dept Code × mês (Nov-2026 … Oct-2027). Mês atual e próximo em rosa. | aba *Assentos* |

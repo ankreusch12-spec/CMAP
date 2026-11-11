@@ -3,12 +3,12 @@
 {% block conteudo %}
 <h1>Painel de ocupação</h1>
 <p class="ajuda">
-  Mesma conta da planilha de capacidade: <b>Res</b> = assentos reservados
+  Mesma conta da aba <i>Summary</i> da planilha: <b>Res</b> = assentos reservados
   (status Confirmado e Fila mensal), <b>Avai</b> = capacidade − reservado.
-  Em vermelho: reservado acima da capacidade.
+  Em vermelho: reservado acima da capacidade. Só aparecem os locais que você acompanha.
 </p>
 
-{% if not linhas %}
+{% if not grupos %}
   <div class="vazio">
     Nenhum local cadastrado ainda. Use <a href="{{ url_for('importar') }}">Importar</a>
     com o relatório do CMAP, ou rode <code>python dados_exemplo.py</code> para testar.
@@ -20,14 +20,17 @@
     <tr>
       <th rowspan="2" class="fixa">Local</th>
       <th rowspan="2">Total Seats</th>
-      {% for m in janela %}<th colspan="3" class="{{ 'restrito' if restrito(m) }}">{{ m.rotulo }}</th>{% endfor %}
+      {% for m in janela %}<th colspan="3">{{ m.rotulo }}</th>{% endfor %}
     </tr>
     <tr>
       {% for m in janela %}<th>Res</th><th>Avai</th><th>Occ</th>{% endfor %}
     </tr>
   </thead>
+
+  {% for g in grupos %}
   <tbody>
-    {% for l in linhas %}
+    <tr class="cidade"><td class="fixa" colspan="2">{{ g.cidade|upper }}</td><td colspan="{{ janela|length * 3 }}"></td></tr>
+    {% for l in g.linhas %}
     <tr>
       <td class="fixa">
         <span class="codigo">{{ l.local.location_id }}</span><br>{{ l.local.descricao }}
@@ -40,10 +43,21 @@
       {% endfor %}
     </tr>
     {% endfor %}
+    <tr class="subtotal">
+      <td class="fixa">Total {{ g.cidade }}</td>
+      <td class="num">{{ g.totais[0].cap }}</td>
+      {% for t in g.totais %}
+        <td class="num">{{ t.res }}</td>
+        <td class="num {{ 'negativo' if t.disp < 0 }}">{{ t.disp }}</td>
+        <td class="num pct">{{ '—' if t.pct is none else '{:.0%}'.format(t.pct) }}</td>
+      {% endfor %}
+    </tr>
   </tbody>
+  {% endfor %}
+
   <tfoot>
     <tr>
-      <td class="fixa">TOTAL (locais com capacidade)</td>
+      <td class="fixa">TOTAL GERAL</td>
       <td class="num">{{ totais[0].cap }}</td>
       {% for t in totais %}
         <td class="num">{{ t.res }}</td>
@@ -54,6 +68,5 @@
   </tfoot>
 </table>
 </div>
-<p class="legenda"><span class="caixa restrito"></span> Alteração restrita (mês atual e próximo, como no CMAP)</p>
 {% endif %}
 {% endblock %}

@@ -69,7 +69,7 @@ def test_fluxo_completo(cliente, app, tmp_path):
     # cria local
     cliente.post("/locais", data={"csrf_token": t, "location_id": "br-pon-ruase",
                                   "site_id": "bpg", "descricao": "Ponta Grossa",
-                                  "capacidade": "30"})
+                                  "capacidade": "30", "ativo": "1"})
     # cria reserva
     r = cliente.post("/reservas/nova", data={
         "csrf_token": t, "resv_desc": "cliente_a_pg", "project_id": "EXEMPLO001",
@@ -88,8 +88,9 @@ def test_fluxo_completo(cliente, app, tmp_path):
     assert cliente.post(f"/reservas/{rid}/assentos", data=dados).status_code == 302
 
     with app.app_context():
-        linhas, totais = banco.ocupacao(janela)
-        cel = linhas[0]["celulas"][0]
+        grupos, totais = banco.ocupacao(janela)
+        assert grupos[0]["cidade"] == "Ponta Grossa"
+        cel = grupos[0]["linhas"][0]["celulas"][0]
         assert (cel["res"], cel["disp"]) == (35, -5)
         assert banco.grade_assentos(rid, janela)[1]["dept_name"] == "COGS (SITE) Team Leader Direct"
 
@@ -128,6 +129,8 @@ def test_importar_relatorio_cmap(cliente, app, tmp_path):
          "EXEMPLO009", "Projeto X", "PRODUCAGENT-DIR", "DED", "A", inicio, 7],
         ["LATAM", "Brazil", "Brazil", "BR-BAR-ARAGU", "BAA", "Barueri Araguaia", "CLIENTE_X",
          "EXEMPLO009", "Projeto X", "PRODUCAGENT-DIR", "DED", "A", inicio, 3],   # soma: 10
+        ["LATAM", "Brazil", "Brazil", "BR-CEA-LEDOS", "FGL", "Fortaleza Goncalves Ledo",
+         "CLIENTE_Z", "EXEMPLO011", "Projeto Z", "PRODUCAGENT-DIR", "DED", "A", inicio, 50],  # não acompanho
         ["LATAM", "Mexico", "Mexico", "MX-XXX", "MXA", "Outro país", "CLIENTE_Y",
          "EXEMPLO010", "Projeto Y", "PRODUCAGENT-DIR", "DED", "A", inicio, 99],  # ignorado
         ["=cmd", "Brazil", "Brazil", "BR-BAR-ARAGU", "BAA", "Barueri Araguaia", "CLIENTE_X",
@@ -141,6 +144,8 @@ def test_importar_relatorio_cmap(cliente, app, tmp_path):
         assert len(res) == 1 and res[0]["resv_desc"] == "CLIENTE_X_BAA"
         grade = banco.grade_assentos(res[0]["id"], meses.janela())
         assert grade[0]["qtd"][meses.atual().chave] == 10
+        # Fortaleza não está nos meus locais: nem local nem reserva foram criados
+        assert [l["location_id"] for l in banco.locais()] == ["BR-BAR-ARAGU"]
 
 
 def test_upload_que_nao_e_excel(cliente, tmp_path):
@@ -155,7 +160,8 @@ def test_upload_que_nao_e_excel(cliente, tmp_path):
 
 def test_exportar_neutraliza_formulas(cliente, app, tmp_path):
     t = token(cliente)
-    cliente.post("/locais", data={"csrf_token": t, "location_id": "BR-A", "descricao": "A"})
+    cliente.post("/locais", data={"csrf_token": t, "location_id": "BR-A", "descricao": "A",
+                                  "ativo": "1"})
     cliente.post("/reservas/nova", data={
         "csrf_token": t, "resv_desc": "X", "project_id": "P1",
         "project_name": "=HYPERLINK(\"http://exemplo\")", "location_id": "BR-A",
@@ -164,3 +170,39 @@ def test_exportar_neutraliza_formulas(cliente, app, tmp_path):
     caminho.write_bytes(cliente.get("/exportar").data)
     valor = load_workbook(caminho)["Reservas"]["C2"].value
     assert valor.startswith("'=")
+
+
+def test_painel_agrupa_por_cidade_e_ignora_locais_que_nao_acompanho(cliente, app):
+    t = token(cliente)
+    for loc, desc, ativo in [("BR-CUR-JOSEL-01", "Curitiba JL1", "1"),
+                             ("BR-SAO-TAGIP", "BF4", "1"),
+                             ("BR-SAO-EZTOW", "EZ Tower", "")]:
+        cliente.post("/locais", data={"csrf_token": t, "location_id": loc, "descricao": desc,
+                                      "capacidade": "10", "ativo": ativo})
+    with app.app_context():
+        grupos, _ = banco.ocupacao(meses.janela())
+        assert [g["cidade"] for g in grupos] == ["São Paulo", "Curitiba"]
+        assert [l["local"]["location_id"] for g in grupos for l in g["linhas"]] == \
+            ["BR-SAO-TAGIP", "BR-CUR-JOSEL-01"]
+    # não dá para criar reserva num local que não acompanho
+    cliente.post("/reservas/nova", data={
+        "csrf_token": t, "resv_desc": "X", "project_id": "P1", "project_name": "P",
+        "location_id": "BR-SAO-EZTOW", "status": "Confirmado"})
+    with app.app_context():
+        assert banco.reservas(mostrar_tudo=True) == []
+
+
+def test_banco_antigo_ganha_coluna_ativo(tmp_path):
+    import sqlite3
+    caminho = tmp_path / "antigo.db"
+    con = sqlite3.connect(caminho)
+    con.execute("""CREATE TABLE locais (location_id TEXT PRIMARY KEY, site_id TEXT NOT NULL DEFAULT '',
+                   descricao TEXT NOT NULL, capacidade INTEGER NOT NULL DEFAULT 0)""")
+    con.executemany("INSERT INTO locais (location_id, descricao) VALUES (?, ?)",
+                    [("BR-PON-RUASE", "Ponta Grossa"), ("BR-CEA-LEDOS", "Fortaleza")])
+    con.commit()
+    con.close()
+    app = criar_app({"TESTING": True, "BANCO": str(caminho)})
+    with app.app_context():
+        assert {l["location_id"]: l["ativo"] for l in banco.locais()} == \
+            {"BR-PON-RUASE": 1, "BR-CEA-LEDOS": 0}

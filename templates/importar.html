@@ -10,7 +10,9 @@
   <code>Country · Location ID · Site ID · Site · Client · Project ID · Project · Dept · Shift · Eff Date · Qty</code>
 </p>
 <ul class="ajuda">
-  <li>Locais que não existirem são criados (depois ajuste a capacidade em <a href="{{ url_for('locais') }}">Locais</a>).</li>
+  <li>Só entram os <b>locais que você acompanha</b> (São Paulo BF4 e Barueri, Curitiba JL1/JL2/JL3/MAL2/MAL3
+    e Ponta Grossa). Linhas de outros locais e de outros países são ignoradas.
+    Para mudar a lista, use a coluna “Acompanho” em <a href="{{ url_for('locais') }}">Locais</a>.</li>
   <li>Reservas são reconhecidas por <b>Project ID + Location ID</b>; as quantidades do arquivo substituem as atuais.</li>
   <li>O arquivo é lido e descartado: só os dados ficam no banco local do seu PC.</li>
 </ul>
@@ -20,7 +22,6 @@
   <label>Arquivo (.xlsx, até 20 MB)
     <input type="file" name="arquivo" accept=".xlsx" required>
   </label>
-  <label class="check"><input type="checkbox" name="todos_paises"> Importar todos os países (padrão: só Brazil)</label>
   <div class="acoes"><button class="botao">Importar</button></div>
 </form>
 {% endblock %}

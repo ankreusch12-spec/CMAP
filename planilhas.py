@@ -124,7 +124,20 @@ def gravar(linhas, usuario: str):
     """
     con = banco.db()
     hoje = date.today().isoformat()
-    resumo = {"locais": 0, "reservas": 0, "valores": 0}
+    resumo = {"locais": 0, "reservas": 0, "valores": 0, "ignoradas": 0}
+
+    # Só entram os locais que eu acompanho (marcados em Locais, ou da lista
+    # MEUS_LOCAIS se o local ainda não existe). O resto é ignorado.
+    cadastrados = {l["location_id"]: l["ativo"] for l in banco.locais()}
+
+    def acompanho(location_id):
+        if location_id in cadastrados:
+            return bool(cadastrados[location_id])
+        return location_id in banco.MEUS_LOCAIS
+
+    total = len(linhas)
+    linhas = [l for l in linhas if acompanho(l["location_id"])]
+    resumo["ignoradas"] = total - len(linhas)
 
     # Soma linhas repetidas (mesmo projeto/local/dept/shift/mês).
     somado = defaultdict(int)
@@ -175,7 +188,8 @@ def gravar(linhas, usuario: str):
         resumo["valores"] += 1
 
     banco.registrar("Importação", f"{resumo['reservas']} reservas novas, "
-                    f"{resumo['locais']} locais novos, {resumo['valores']} valores", con)
+                    f"{resumo['locais']} locais novos, {resumo['valores']} valores, "
+                    f"{resumo['ignoradas']} linhas de outros locais ignoradas", con)
     con.commit()
     return resumo
 
@@ -239,6 +253,7 @@ def exportar(janela: list[meses.Mes]) -> BytesIO:
                r.resv_desc, r.status
         FROM assentos a JOIN reservas r ON r.id = a.reserva_id
         JOIN locais l ON l.location_id = r.location_id
+        WHERE l.ativo = 1
         ORDER BY l.descricao, r.project_id, a.dept_code, a.mes""").fetchall()
     aba = _aba(livro, "Relatorio CMAP",
                ["Country", "Location ID", "Site ID", "Site", "Client", "Project ID", "Project",

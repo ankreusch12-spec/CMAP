@@ -143,3 +143,9 @@ input.qtd { width: 64px; text-align: right; }
   main { padding: 12px 16px 40px; }
   .topo { padding: 10px 16px; }
 }
+
+/* painel agrupado por cidade (igual à aba Summary) */
+.painel tr.cidade td { background: var(--barra); font-weight: 700; letter-spacing: .3px; }
+.painel tr.subtotal td { font-weight: 700; border-bottom: 2px solid var(--borda); }
+details.outros { margin-top: 20px; }
+details.outros summary { cursor: pointer; color: var(--suave); }

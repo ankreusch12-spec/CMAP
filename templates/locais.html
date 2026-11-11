@@ -3,40 +3,57 @@
 {% block conteudo %}
 <h1>Disponibilidade de locais</h1>
 <p class="ajuda">De-para dos locais do CMAP. A <b>capacidade</b> (Prod + TL) é usada no Painel.
+  Só os locais marcados em <b>Acompanho</b> aparecem no Painel, nas reservas e na importação.
   Para alterar, edite a linha e clique em Salvar.</p>
 
+{% macro tabela(lista, titulo) %}
+<h2>{{ titulo }} <span class="contador">({{ lista|length }})</span></h2>
 <table class="grade lista" data-filtravel>
   <thead>
-    <tr><th>Localização</th><th>ID do site</th><th>Descrição</th><th>Capacidade</th><th></th></tr>
+    <tr><th>Localização</th><th>ID do site</th><th>Descrição</th><th>Capacidade</th><th>Acompanho</th><th></th></tr>
     <tr class="filtros">
       <th><input data-filtro="0" aria-label="Filtrar localização"></th>
       <th><input data-filtro="1" aria-label="Filtrar ID do site"></th>
       <th><input data-filtro="2" aria-label="Filtrar descrição"></th>
-      <th></th><th></th>
+      <th></th><th></th><th></th>
     </tr>
   </thead>
   <tbody>
-    {% for l in locais %}
+    {% for l in lista %}
+    {% set f = 'f-' ~ l.location_id %}
     <tr>
       <td class="codigo" data-valor="{{ l.location_id }}">{{ l.location_id }}</td>
       <td data-valor="{{ l.site_id }}">
-        <input form="f{{ loop.index }}" name="site_id" value="{{ l.site_id }}" maxlength="10" class="curto">
+        <input form="{{ f }}" name="site_id" value="{{ l.site_id }}" maxlength="10" class="curto">
       </td>
       <td data-valor="{{ l.descricao }}">
-        <input form="f{{ loop.index }}" name="descricao" value="{{ l.descricao }}" maxlength="120" required>
+        <input form="{{ f }}" name="descricao" value="{{ l.descricao }}" maxlength="120" required>
       </td>
-      <td><input form="f{{ loop.index }}" name="capacidade" type="number" min="0" value="{{ l.capacidade }}" class="curto"></td>
+      <td><input form="{{ f }}" name="capacidade" type="number" min="0" value="{{ l.capacidade }}" class="curto"></td>
+      <td><input form="{{ f }}" name="ativo" type="checkbox" value="1" {{ 'checked' if l.ativo }} aria-label="Acompanho este local"></td>
       <td>
-        <form id="f{{ loop.index }}" method="post" action="{{ url_for('salvar_local') }}">
+        <form id="{{ f }}" method="post" action="{{ url_for('salvar_local') }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="location_id" value="{{ l.location_id }}">
           <button class="botao pequeno">Salvar</button>
         </form>
       </td>
     </tr>
+    {% else %}
+    <tr><td colspan="6" class="vazio">Nenhum local aqui.</td></tr>
     {% endfor %}
   </tbody>
 </table>
+{% endmacro %}
+
+{{ tabela(meus, "Locais que acompanho") }}
+
+{% if outros %}
+<details class="outros">
+  <summary>Outros locais do CMAP (não acompanho) — {{ outros|length }}</summary>
+  {{ tabela(outros, "Outros locais") }}
+</details>
+{% endif %}
 
 <h2>Novo local</h2>
 <form method="post" action="{{ url_for('salvar_local') }}" class="formulario linha">
@@ -45,6 +62,7 @@
   <label>ID do site <input name="site_id" placeholder="BPG" maxlength="10" class="curto"></label>
   <label>Descrição <input name="descricao" required maxlength="120"></label>
   <label>Capacidade <input name="capacidade" type="number" min="0" value="0" class="curto"></label>
+  <label class="check"><input type="checkbox" name="ativo" value="1" checked> Acompanho</label>
   <button class="botao">Adicionar</button>
 </form>
 {% endblock %}

@@ -77,13 +77,16 @@ def registrar_rotas(app: Flask):
     @app.get("/")
     def painel():
         janela = meses.janela()
-        linhas, totais = banco.ocupacao(janela)
-        return render_template("painel.html", janela=janela, linhas=linhas, totais=totais)
+        grupos, totais = banco.ocupacao(janela)
+        return render_template("painel.html", janela=janela, grupos=grupos, totais=totais)
 
     # ------------------------------------------------------------ LOCAIS (de-para)
     @app.get("/locais")
     def locais():
-        return render_template("locais.html", locais=banco.locais())
+        todos = banco.locais()
+        return render_template("locais.html",
+                               meus=[l for l in todos if l["ativo"]],
+                               outros=[l for l in todos if not l["ativo"]])
 
     @app.post("/locais")
     def salvar_local():
@@ -92,19 +95,21 @@ def registrar_rotas(app: Flask):
             site_id = texto("site_id", obrigatorio=False).upper()
             descricao = texto("descricao")
             capacidade = int(request.form.get("capacidade") or 0)
-            if capacidade < 0:
-                raise ValueError("A capacidade não pode ser negativa.")
+            if not 0 <= capacidade <= 100000:
+                raise ValueError("Capacidade inválida.")
+            ativo = 1 if request.form.get("ativo") else 0
         except ValueError as erro:
             flash(str(erro), "erro")
             return redirect(url_for("locais"))
         con = banco.db()
-        con.execute("""INSERT INTO locais (location_id, site_id, descricao, capacidade)
-                       VALUES (?, ?, ?, ?)
+        con.execute("""INSERT INTO locais (location_id, site_id, descricao, capacidade, ativo)
+                       VALUES (?, ?, ?, ?, ?)
                        ON CONFLICT (location_id) DO UPDATE SET
                          site_id = excluded.site_id, descricao = excluded.descricao,
-                         capacidade = excluded.capacidade""",
-                    (location_id, site_id, descricao, capacidade))
-        banco.registrar("Local salvo", f"{location_id} — {descricao} — capacidade {capacidade}")
+                         capacidade = excluded.capacidade, ativo = excluded.ativo""",
+                    (location_id, site_id, descricao, capacidade, ativo))
+        banco.registrar("Local salvo", f"{location_id} — {descricao} — capacidade {capacidade}"
+                                       f" — {'acompanho' if ativo else 'não acompanho'}")
         con.commit()
         flash(f"Local {location_id} salvo.", "ok")
         return redirect(url_for("locais"))
@@ -117,7 +122,7 @@ def registrar_rotas(app: Flask):
 
     @app.get("/reservas/nova")
     def nova_reserva():
-        return render_template("reserva.html", r=None, locais=banco.locais(),
+        return render_template("reserva.html", r=None, locais=banco.locais(somente_ativos=True),
                                janela=meses.janela(), grade=[])
 
     @app.post("/reservas/nova")
@@ -142,7 +147,8 @@ def registrar_rotas(app: Flask):
     def ver_reserva(reserva_id):
         r = banco.reserva(reserva_id) or abort(404)
         janela = meses.janela()
-        return render_template("reserva.html", r=r, locais=banco.locais(), janela=janela,
+        return render_template("reserva.html", r=r, locais=banco.locais(somente_ativos=True),
+                               janela=janela,
                                grade=banco.grade_assentos(reserva_id, janela),
                                aba=request.args.get("aba", "perfil"))
 
@@ -235,9 +241,8 @@ def registrar_rotas(app: Flask):
             flash("O arquivo não parece ser um Excel (.xlsx) válido.", "erro")
             return redirect(url_for("importar"))
         arquivo.stream.seek(0)
-        pais = None if request.form.get("todos_paises") else "Brazil"
         try:
-            linhas, avisos = planilhas.ler(arquivo.stream, somente_pais=pais)
+            linhas, avisos = planilhas.ler(arquivo.stream)
         except planilhas.ErroPlanilha as erro:
             flash(str(erro), "erro")
             return redirect(url_for("importar"))
@@ -246,7 +251,9 @@ def registrar_rotas(app: Flask):
             return redirect(url_for("importar"))
         resumo = planilhas.gravar(linhas, app.config["USUARIO"])
         flash(f"Importado: {resumo['reservas']} reservas novas, {resumo['locais']} locais "
-              f"novos e {resumo['valores']} valores mês a mês.", "ok")
+              f"novos e {resumo['valores']} valores mês a mês. "
+              f"{resumo['ignoradas']} linha(s) de locais que você não acompanha foram ignoradas.",
+              "ok")
         for aviso in avisos[:10]:
             flash(aviso, "erro")
         return redirect(url_for("reservas"))
@@ -273,7 +280,7 @@ def ler_perfil():
     if status not in banco.STATUS:
         raise ValueError("Status inválido.")
     location_id = texto("location_id")
-    if not banco.db().execute("SELECT 1 FROM locais WHERE location_id = ?",
+    if not banco.db().execute("SELECT 1 FROM locais WHERE location_id = ? AND ativo = 1",
                               (location_id,)).fetchone():
         raise ValueError("Escolha um local da lista.")
     return (texto("resv_desc").upper(), codigo("project_id"), texto("project_name"),

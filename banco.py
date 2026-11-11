@@ -23,12 +23,37 @@ STATUS = ["Confirmado", "Fila mensal", "Rascunho", "Cancelado"]
 # Quais status "ocupam" assentos na conta do painel.
 STATUS_QUE_OCUPAM = ["Confirmado", "Fila mensal"]
 
+# Os locais que EU acompanho. Só eles entram no painel, nas reservas e na
+# importação. Os demais (Fortaleza, EZ Tower...) são ignorados.
+# Para acompanhar outro local, marque "Acompanho" na tela Locais.
+MEUS_LOCAIS = {
+    "BR-SAO-TAGIP",     # São Paulo — Barra Funda BF4
+    "BR-BAR-ARAGU",     # São Paulo — Barueri
+    "BR-CUR-JOSEL-01",  # Curitiba — JL1
+    "BR-CUR-JOSEL-02",  # Curitiba — JL2
+    "BR-CUR-JOSEL-03",  # Curitiba — JL3
+    "BR-CUR-MALDE-01",  # Curitiba — Marechal 2
+    "BR-CUR-MALDE-02",  # Curitiba — Marechal 3
+    "BR-PON-RUASE",     # Ponta Grossa
+}
+
+# Cidade de cada local, pelo pedaço do meio do código (BR-CUR-... = Curitiba).
+# A ordem aqui é a ordem dos grupos no painel.
+CIDADES = {"SAO": "São Paulo", "BAR": "São Paulo", "CUR": "Curitiba", "PON": "Ponta Grossa"}
+ORDEM_CIDADES = ["São Paulo", "Curitiba", "Ponta Grossa"]
+
+
+def cidade(location_id: str) -> str:
+    partes = location_id.split("-")
+    return CIDADES.get(partes[1] if len(partes) > 1 else "", "Outros")
+
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS locais (
     location_id  TEXT PRIMARY KEY,          -- ex.: BR-PON-RUASE
     site_id      TEXT NOT NULL DEFAULT '',  -- ex.: BPG
     descricao    TEXT NOT NULL,             -- ex.: Ponta Grossa
-    capacidade   INTEGER NOT NULL DEFAULT 0 -- total de posições (Prod + TL)
+    capacidade   INTEGER NOT NULL DEFAULT 0, -- total de posições (Prod + TL)
+    ativo        INTEGER NOT NULL DEFAULT 1  -- 1 = local que eu acompanho
 );
 
 CREATE TABLE IF NOT EXISTS reservas (
@@ -82,12 +107,26 @@ def db() -> sqlite3.Connection:
 def iniciar(app):
     with conectar(app.config["BANCO"]) as con:
         con.executescript(ESQUEMA)
+        atualizar_banco_antigo(con)
 
     @app.teardown_appcontext
     def fechar(_erro=None):
         con = g.pop("db", None)
         if con is not None:
             con.close()
+
+
+def atualizar_banco_antigo(con):
+    """
+    Bancos criados na 1ª versão não têm a coluna `ativo`.
+    Aqui ela é criada e já marca só os MEUS_LOCAIS como acompanhados.
+    """
+    colunas = {c["name"] for c in con.execute("PRAGMA table_info(locais)")}
+    if "ativo" not in colunas:
+        con.execute("ALTER TABLE locais ADD COLUMN ativo INTEGER NOT NULL DEFAULT 1")
+        for linha in con.execute("SELECT location_id FROM locais").fetchall():
+            con.execute("UPDATE locais SET ativo = ? WHERE location_id = ?",
+                        (int(linha["location_id"] in MEUS_LOCAIS), linha["location_id"]))
 
 
 def registrar(acao: str, detalhe: str = "", con: sqlite3.Connection | None = None):
@@ -103,17 +142,27 @@ def registrar(acao: str, detalhe: str = "", con: sqlite3.Connection | None = Non
 # Sempre usamos "?" nos SQL (nunca juntamos texto do usuário na consulta).
 # Isso evita SQL injection.
 
-def locais():
-    return db().execute("SELECT * FROM locais ORDER BY descricao").fetchall()
+def _ordem(local):
+    """Ordena por cidade (São Paulo, Curitiba, Ponta Grossa) e depois pelo nome."""
+    c = cidade(local["location_id"])
+    return (ORDEM_CIDADES.index(c) if c in ORDEM_CIDADES else 99, local["descricao"])
+
+
+def locais(somente_ativos: bool = False):
+    sql = "SELECT * FROM locais"
+    if somente_ativos:
+        sql += " WHERE ativo = 1"
+    return sorted(db().execute(sql).fetchall(), key=_ordem)
 
 
 def reservas(mostrar_tudo: bool = False):
     sql = """
         SELECT r.*, l.site_id, l.descricao AS site_nome
         FROM reservas r JOIN locais l ON l.location_id = r.location_id
+        WHERE l.ativo = 1
     """
     if not mostrar_tudo:
-        sql += " WHERE r.status != 'Cancelado'"
+        sql += " AND r.status != 'Cancelado'"
     sql += " ORDER BY r.criado_em DESC, r.id DESC"
     return db().execute(sql).fetchall()
 
@@ -146,8 +195,12 @@ def grade_assentos(reserva_id: int, janela: list[meses.Mes]):
 
 def ocupacao(janela: list[meses.Mes]):
     """
-    Painel: para cada local e mês -> reservado, disponível e % ocupação.
+    Painel: para cada local e mês -> reservado, disponível e % ocupação,
+    agrupado por cidade com subtotal (igual à aba Summary da planilha).
     Mesma conta da planilha: Avai = Total Seats - Res.
+
+    Devolve (grupos, total_geral):
+      grupos = [{"cidade": "Curitiba", "linhas": [...], "totais": [...]}, ...]
     """
     marcas = ",".join("?" * len(STATUS_QUE_OCUPAM))
     somas = db().execute(f"""
@@ -157,27 +210,34 @@ def ocupacao(janela: list[meses.Mes]):
         GROUP BY r.location_id, a.mes""", STATUS_QUE_OCUPAM).fetchall()
     reservado = {(s["location_id"], s["mes"]): s["total"] for s in somas}
 
-    linhas = []
-    totais = [{"cap": 0, "res": 0} for _ in janela]
-    for local in locais():
+    grupos: dict[str, dict] = {}
+    geral = _totais_vazios(janela)
+    for local in locais(somente_ativos=True):
         cap = local["capacidade"]
         celulas = []
-        for i, m in enumerate(janela):
+        for m in janela:
             res = reservado.get((local["location_id"], m.chave), 0)
-            celulas.append({
-                "res": res,
-                "disp": cap - res if cap else None,
-                "pct": res / cap if cap else None,
-            })
-            if cap:                         # só soma no total quem tem capacidade
-                totais[i]["cap"] += cap
-                totais[i]["res"] += res
-        linhas.append({"local": local, "celulas": celulas})
+            celulas.append({"res": res,
+                            "disp": cap - res if cap else None,
+                            "pct": res / cap if cap else None})
+        grupo = grupos.setdefault(cidade(local["location_id"]), {
+            "cidade": cidade(local["location_id"]), "linhas": [],
+            "totais": _totais_vazios(janela)})
+        grupo["linhas"].append({"local": local, "celulas": celulas})
+        if cap:                              # só soma no total quem tem capacidade
+            for i, c in enumerate(celulas):
+                for t in (grupo["totais"][i], geral[i]):
+                    t["cap"] += cap
+                    t["res"] += c["res"]
 
-    for t in totais:
+    for t in [*geral, *(t for g in grupos.values() for t in g["totais"])]:
         t["disp"] = t["cap"] - t["res"]
         t["pct"] = t["res"] / t["cap"] if t["cap"] else None
-    return linhas, totais
+    return list(grupos.values()), geral
+
+
+def _totais_vazios(janela):
+    return [{"cap": 0, "res": 0} for _ in janela]
 
 
 def historico(limite: int = 300):
