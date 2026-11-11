@@ -1,0 +1,22 @@
+# --- NUNCA vão para o GitHub ---
+# Dados da empresa (planilhas, exports, banco local)
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+*.db
+*.sqlite
+instance/
+dados/
+
+# Ambiente Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Segredos
+.env
+*.key
+secret_key

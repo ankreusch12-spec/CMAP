@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block titulo %}Locais{% endblock %}
+{% block conteudo %}
+<h1>Disponibilidade de locais</h1>
+<p class="ajuda">De-para dos locais do CMAP. A <b>capacidade</b> (Prod + TL) é usada no Painel.
+  Para alterar, edite a linha e clique em Salvar.</p>
+
+<table class="grade lista" data-filtravel>
+  <thead>
+    <tr><th>Localização</th><th>ID do site</th><th>Descrição</th><th>Capacidade</th><th></th></tr>
+    <tr class="filtros">
+      <th><input data-filtro="0" aria-label="Filtrar localização"></th>
+      <th><input data-filtro="1" aria-label="Filtrar ID do site"></th>
+      <th><input data-filtro="2" aria-label="Filtrar descrição"></th>
+      <th></th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in locais %}
+    <tr>
+      <td class="codigo" data-valor="{{ l.location_id }}">{{ l.location_id }}</td>
+      <td data-valor="{{ l.site_id }}">
+        <input form="f{{ loop.index }}" name="site_id" value="{{ l.site_id }}" maxlength="10" class="curto">
+      </td>
+      <td data-valor="{{ l.descricao }}">
+        <input form="f{{ loop.index }}" name="descricao" value="{{ l.descricao }}" maxlength="120" required>
+      </td>
+      <td><input form="f{{ loop.index }}" name="capacidade" type="number" min="0" value="{{ l.capacidade }}" class="curto"></td>
+      <td>
+        <form id="f{{ loop.index }}" method="post" action="{{ url_for('salvar_local') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="location_id" value="{{ l.location_id }}">
+          <button class="botao pequeno">Salvar</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Novo local</h2>
+<form method="post" action="{{ url_for('salvar_local') }}" class="formulario linha">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Localização <input name="location_id" placeholder="BR-XXX-XXXXX" required maxlength="40"></label>
+  <label>ID do site <input name="site_id" placeholder="BPG" maxlength="10" class="curto"></label>
+  <label>Descrição <input name="descricao" required maxlength="120"></label>
+  <label>Capacidade <input name="capacidade" type="number" min="0" value="0" class="curto"></label>
+  <button class="botao">Adicionar</button>
+</form>
+{% endblock %}

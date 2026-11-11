@@ -1,0 +1,145 @@
+/* Controle CMAP — visual simples, inspirado nas telas do CMAP:
+   barras cinza, cabeçalhos lilás, meses restritos em rosa. */
+
+:root {
+  --fundo: #ffffff;
+  --texto: #1f2328;
+  --suave: #5c6370;
+  --borda: #d5d8dd;
+  --barra: #dfe1e5;
+  --cabecalho: #c9c9f0;   /* lilás das grades do CMAP */
+  --link: #1a5fd0;
+  --restrito: #f6b3c4;    /* rosa "Alteração Restrita" */
+  --negativo: #fde2e2;
+  --negativo-texto: #b42318;
+  --ok: #e7f6ec;
+  --ok-texto: #1e6b3a;
+  --campo: #ffffff;
+  --linha-par: #f7f8fa;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #17191c; --texto: #e6e8eb; --suave: #a3a9b3; --borda: #343841;
+    --barra: #262a30; --cabecalho: #3b3b6b; --link: #7fb0ff; --restrito: #6e2f40;
+    --negativo: #4a1f1f; --negativo-texto: #ffb4ab; --ok: #1d3a28; --ok-texto: #a6e3b8;
+    --campo: #1e2126; --linha-par: #1c1f23;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--fundo); color: var(--texto);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+a { color: var(--link); }
+main { padding: 16px 24px 48px; }
+h1 { font-size: 20px; margin: 4px 0 8px; }
+h2 { font-size: 16px; margin: 28px 0 8px; }
+code { font-size: 12px; }
+
+/* topo */
+.topo {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px;
+  padding: 10px 24px; border-bottom: 1px solid var(--borda);
+}
+.marca { font-weight: 700; font-size: 17px; letter-spacing: .2px; }
+.topo nav { display: flex; flex-wrap: wrap; gap: 4px; }
+.topo nav a {
+  padding: 6px 10px; border-radius: 4px; text-decoration: none; color: var(--texto);
+}
+.topo nav a:hover { background: var(--barra); }
+.topo nav a.ativo { background: var(--barra); font-weight: 600; }
+
+/* avisos */
+.aviso { padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; }
+.aviso-ok { background: var(--ok); color: var(--ok-texto); }
+.aviso-erro { background: var(--negativo); color: var(--negativo-texto); }
+.ajuda { color: var(--suave); max-width: 900px; }
+.vazio { color: var(--suave); padding: 16px; text-align: center; }
+
+/* barra de ações (igual "Lista de reservas | Gerenciar | Mostrar tudo") */
+.barra {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  background: var(--barra); padding: 6px 10px; margin-bottom: 0;
+}
+.barra-titulo { font-weight: 600; margin-right: 12px; }
+.contador { margin-left: auto; color: var(--suave); font-size: 12px; }
+
+/* botões */
+.botao {
+  font: inherit; border: 1px solid var(--borda); background: var(--link); color: #fff;
+  padding: 6px 14px; border-radius: 4px; cursor: pointer; text-decoration: none;
+  display: inline-block;
+}
+.botao.claro { background: var(--fundo); color: var(--texto); font-size: 12px; }
+.botao.pequeno { padding: 3px 10px; font-size: 12px; }
+.botao.perigo { background: var(--negativo-texto); }
+button.link {
+  font: inherit; background: none; border: 0; color: var(--link); cursor: pointer; padding: 0;
+}
+
+/* tabelas */
+.rolagem { overflow-x: auto; max-width: 100%; }
+table.grade { border-collapse: collapse; width: 100%; }
+.grade th, .grade td { border-bottom: 1px solid var(--borda); padding: 6px 8px; text-align: left; }
+.grade thead th { background: var(--barra); font-weight: 600; white-space: nowrap; }
+.grade.assentos thead th, .grade.painel thead th { background: var(--cabecalho); }
+.grade tbody tr:nth-child(even) { background: var(--linha-par); }
+.grade tfoot td { font-weight: 700; border-top: 2px solid var(--borda); }
+.grade .num { text-align: right; font-variant-numeric: tabular-nums; }
+.grade .pct { color: var(--suave); }
+.grade th.restrito, .grade td.restrito { background: var(--restrito); }
+.grade td.negativo { background: var(--negativo); color: var(--negativo-texto); font-weight: 700; }
+.grade .fixa { position: sticky; left: 0; background: var(--fundo); z-index: 1; min-width: 200px; }
+.grade thead .fixa { background: var(--cabecalho); }
+.painel th, .painel td { padding: 4px 6px; font-size: 13px; }
+.codigo { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.filtros th { background: var(--fundo) !important; padding: 4px 8px; }
+.filtros input { width: 100%; min-width: 70px; }
+
+/* campos */
+input, select {
+  font: inherit; color: var(--texto); background: var(--campo);
+  border: 1px solid var(--borda); border-radius: 3px; padding: 4px 6px;
+}
+input[readonly] { background: transparent; border-color: transparent; }
+input.curto { width: 80px; }
+input.qtd { width: 64px; text-align: right; }
+.assentos td { padding: 2px 4px; }
+.assentos tr.nova input { border-style: dashed; }
+
+.formulario { display: grid; gap: 10px; max-width: 560px; margin: 12px 0; }
+.formulario label { display: grid; gap: 4px; font-weight: 600; }
+.formulario label.check { display: flex; gap: 8px; font-weight: 400; align-items: center; }
+.formulario.linha { display: flex; flex-wrap: wrap; align-items: end; max-width: none; }
+.acoes { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.excluir { margin-top: 32px; }
+
+/* abas (Perfil | Assentos) */
+.abas { display: flex; gap: 2px; background: var(--barra); padding: 4px 4px 0; margin-bottom: 12px; }
+.abas button {
+  font: inherit; border: 0; background: transparent; padding: 8px 18px; cursor: pointer; color: var(--texto);
+}
+.abas button.ativa { background: var(--fundo); font-weight: 600; }
+.oculto { display: none; }
+
+.cabecalho-reserva {
+  display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; margin: 0 0 12px;
+}
+.cabecalho-reserva dt { color: var(--suave); text-align: right; }
+.cabecalho-reserva dd { margin: 0; }
+
+/* status */
+.status { padding: 1px 8px; border-radius: 10px; font-size: 12px; background: var(--barra); }
+.status-confirmado { background: var(--ok); color: var(--ok-texto); }
+.status-cancelado { background: var(--negativo); color: var(--negativo-texto); }
+
+/* legenda */
+.legenda { color: var(--suave); font-size: 12px; }
+.caixa { display: inline-block; width: 14px; height: 12px; vertical-align: middle; border: 1px solid var(--borda); }
+.caixa.restrito { background: var(--restrito); }
+
+@media (max-width: 640px) {
+  main { padding: 12px 16px 40px; }
+  .topo { padding: 10px 16px; }
+}

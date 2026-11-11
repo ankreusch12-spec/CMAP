@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block titulo %}Ver reserva{% endblock %}
+{% block conteudo %}
+<h1>Ver reserva</h1>
+
+<div class="barra">
+  <span class="barra-titulo">Lista de reservas</span>
+  <a class="botao claro" href="{{ url_for('nova_reserva') }}">Nova reserva</a>
+  {% if tudo %}
+    <a class="botao claro" href="{{ url_for('reservas') }}">Ocultar canceladas</a>
+  {% else %}
+    <a class="botao claro" href="{{ url_for('reservas', tudo=1) }}">Mostrar tudo</a>
+  {% endif %}
+  <span class="contador" data-contador>{{ reservas|length }} reserva(s)</span>
+</div>
+
+<div class="rolagem">
+<table class="grade lista" data-filtravel>
+  <thead>
+    <tr>
+      <th></th><th>Resv. Desc.</th><th>ID do projeto</th><th>Nome do projeto</th>
+      <th>ID do site</th><th>Nome do site</th><th>Identificação do local</th>
+      <th>Data de criação</th><th>Criado por</th><th>Status</th>
+    </tr>
+    <tr class="filtros">
+      <th></th>
+      {% for i in range(1, 10) %}<th><input data-filtro="{{ i }}" aria-label="Filtrar coluna {{ i }}"></th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in reservas %}
+    <tr>
+      <td>
+        <form method="post" action="{{ url_for('copiar_reserva', reserva_id=r.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="link">Cópia</button>
+        </form>
+      </td>
+      <td><a href="{{ url_for('ver_reserva', reserva_id=r.id) }}">{{ r.resv_desc }}</a></td>
+      <td>{{ r.project_id }}</td>
+      <td>{{ r.project_name }}</td>
+      <td>{{ r.site_id }}</td>
+      <td>{{ r.site_nome }}</td>
+      <td>{{ r.location_id }}</td>
+      <td data-valor="{{ r.criado_em }}">{{ r.criado_em[8:10] }}/{{ r.criado_em[5:7] }}/{{ r.criado_em[0:4] }}</td>
+      <td>{{ r.criado_por }}</td>
+      <td><span class="status status-{{ r.status|lower|replace(' ', '-') }}">{{ r.status }}</span></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="10" class="vazio">Nenhuma reserva. Crie uma nova ou importe o relatório do CMAP.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

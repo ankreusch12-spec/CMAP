@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block titulo %}Importar{% endblock %}
+{% block conteudo %}
+<h1>Importar relatório do CMAP</h1>
+<p class="ajuda">
+  Envie o Excel exportado do CMAP (o mesmo que alimenta a aba <i>12 month forecast</i>)
+  ou um arquivo gerado por <b>Exportar Excel</b> deste controle.
+</p>
+<p class="ajuda">Colunas esperadas:
+  <code>Country · Location ID · Site ID · Site · Client · Project ID · Project · Dept · Shift · Eff Date · Qty</code>
+</p>
+<ul class="ajuda">
+  <li>Locais que não existirem são criados (depois ajuste a capacidade em <a href="{{ url_for('locais') }}">Locais</a>).</li>
+  <li>Reservas são reconhecidas por <b>Project ID + Location ID</b>; as quantidades do arquivo substituem as atuais.</li>
+  <li>O arquivo é lido e descartado: só os dados ficam no banco local do seu PC.</li>
+</ul>
+
+<form method="post" enctype="multipart/form-data" class="formulario">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Arquivo (.xlsx, até 20 MB)
+    <input type="file" name="arquivo" accept=".xlsx" required>
+  </label>
+  <label class="check"><input type="checkbox" name="todos_paises"> Importar todos os países (padrão: só Brazil)</label>
+  <div class="acoes"><button class="botao">Importar</button></div>
+</form>
+{% endblock %}

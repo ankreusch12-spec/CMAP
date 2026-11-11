@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Controle CMAP{% endblock %} · Controle CMAP</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='estilo.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+  <header class="topo">
+    <span class="marca">Controle CMAP</span>
+    <nav>
+      {% set ep = request.endpoint or '' %}
+      <a href="{{ url_for('painel') }}" class="{{ 'ativo' if ep == 'painel' }}">Painel</a>
+      <a href="{{ url_for('reservas') }}" class="{{ 'ativo' if 'reserva' in ep }}">Ver reserva</a>
+      <a href="{{ url_for('locais') }}" class="{{ 'ativo' if ep == 'locais' }}">Locais</a>
+      <a href="{{ url_for('importar') }}" class="{{ 'ativo' if ep == 'importar' }}">Importar</a>
+      <a href="{{ url_for('exportar') }}">Exportar Excel</a>
+      <a href="{{ url_for('historico') }}" class="{{ 'ativo' if ep == 'historico' }}">Histórico</a>
+    </nav>
+  </header>
+
+  <main>
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+      {% for tipo, msg in mensagens %}
+        <div class="aviso aviso-{{ tipo }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block conteudo %}{% endblock %}
+  </main>
+</body>
+</html>

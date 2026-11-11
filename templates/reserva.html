@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block titulo %}{{ r.resv_desc if r else 'Nova reserva' }}{% endblock %}
+{% block conteudo %}
+<p><a href="{{ url_for('reservas') }}">← Voltar para a lista</a></p>
+
+<div class="abas" data-abas>
+  <button type="button" data-aba="perfil" class="{{ 'ativa' if not r or aba == 'perfil' }}">Perfil</button>
+  {% if r %}<button type="button" data-aba="assentos" class="{{ 'ativa' if aba == 'assentos' }}">Assentos</button>{% endif %}
+</div>
+
+{# ---------------------------------------------------------------- PERFIL #}
+<section data-painel="perfil" class="{{ 'oculto' if r and aba == 'assentos' }}">
+  <form method="post"
+        action="{{ url_for('salvar_perfil', reserva_id=r.id) if r else url_for('criar_reserva') }}"
+        class="formulario">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Resv. Desc. <input name="resv_desc" value="{{ r.resv_desc if r }}" required maxlength="120" placeholder="CLIENTE_SITE"></label>
+    <label>ID do projeto <input name="project_id" value="{{ r.project_id if r }}" required maxlength="40" placeholder="WHBRASIL000"></label>
+    <label>Nome do projeto <input name="project_name" value="{{ r.project_name if r }}" required maxlength="120" placeholder="P_CLIENTE_CWB"></label>
+    <label>Cliente <input name="cliente" value="{{ r.cliente if r }}" maxlength="120"></label>
+    <label>Local
+      <select name="location_id" required>
+        <option value="">— escolha —</option>
+        {% for l in locais %}
+          <option value="{{ l.location_id }}" {{ 'selected' if r and r.location_id == l.location_id }}>
+            {{ l.site_id ~ ' · ' if l.site_id }}{{ l.location_id }} — {{ l.descricao }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Status
+      <select name="status">
+        {% for s in STATUS %}<option {{ 'selected' if (r and r.status == s) or (not r and s == 'Rascunho') }}>{{ s }}</option>{% endfor %}
+      </select>
+    </label>
+    {% if r %}<p class="ajuda">Criado em {{ r.criado_em }} por {{ r.criado_por }}</p>{% endif %}
+    <div class="acoes">
+      <button class="botao">{{ 'Salvar perfil' if r else 'Criar reserva' }}</button>
+    </div>
+  </form>
+  {% if r %}
+  <form method="post" action="{{ url_for('excluir_reserva', reserva_id=r.id) }}" class="excluir"
+        data-confirmar="Excluir a reserva {{ r.resv_desc }}? Isso não pode ser desfeito.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="botao perigo">Excluir reserva</button>
+  </form>
+  {% endif %}
+</section>
+
+{# ---------------------------------------------------------------- ASSENTOS #}
+{% if r %}
+<section data-painel="assentos" class="{{ 'oculto' if aba != 'assentos' }}">
+  <dl class="cabecalho-reserva">
+    <dt>Draft ID:</dt><dd>{{ r.resv_desc }}</dd>
+    <dt>Project:</dt><dd>{{ r.project_id }}-{{ r.project_name }}</dd>
+    <dt>Site:</dt><dd>{{ r.site_id }}({{ r.location_id }}) {{ r.site_nome }}</dd>
+    <dt>Status:</dt><dd>{{ r.status }}</dd>
+  </dl>
+
+  <form method="post" action="{{ url_for('salvar_assentos', reserva_id=r.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="linhas" value="{{ grade|length + 1 }}" data-total-linhas>
+    <div class="rolagem">
+    <table class="grade assentos">
+      <thead>
+        <tr>
+          <th>Dept Code</th><th>Dept Name</th><th>Shift</th>
+          {% for m in janela %}<th class="{{ 'restrito' if restrito(m) }}">{{ m.rotulo }}</th>{% endfor %}
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody data-corpo-grade>
+        {% for l in grade %}
+        {% set i = loop.index0 %}
+        <tr>
+          <td><input name="dept_code_{{ i }}" value="{{ l.dept_code }}" readonly class="codigo"></td>
+          <td><input name="dept_name_{{ i }}" value="{{ l.dept_name }}" maxlength="120"></td>
+          <td><input name="shift_{{ i }}" value="{{ l.shift }}" readonly class="curto"></td>
+          {% for m in janela %}
+            <td class="{{ 'restrito' if restrito(m) }}">
+              <input name="q_{{ i }}_{{ m.chave }}" value="{{ l.qtd.get(m.chave, 0) }}" inputmode="numeric" pattern="[0-9]*" class="qtd">
+            </td>
+          {% endfor %}
+          <td class="num total-linha"></td>
+        </tr>
+        {% endfor %}
+        {# linha em branco para adicionar um novo Dept Code #}
+        {% set i = grade|length %}
+        <tr class="nova" data-linha-modelo>
+          <td><input name="dept_code_{{ i }}" placeholder="+ Dept Code" maxlength="40" class="codigo" list="depts"></td>
+          <td><input name="dept_name_{{ i }}" placeholder="(preenche sozinho)" maxlength="120"></td>
+          <td><input name="shift_{{ i }}" value="DED" maxlength="10" class="curto"></td>
+          {% for m in janela %}
+            <td class="{{ 'restrito' if restrito(m) }}"><input name="q_{{ i }}_{{ m.chave }}" value="0" inputmode="numeric" pattern="[0-9]*" class="qtd"></td>
+          {% endfor %}
+          <td class="num total-linha"></td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3">Total da reserva</td>
+          {% for m in janela %}<td class="num" data-total-mes="{{ m.chave }}"></td>{% endfor %}
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    </div>
+    <datalist id="depts">
+      <option value="PRODUCAGENT-DIR"><option value="TEAMLEADER-DIR">
+    </datalist>
+    <div class="acoes">
+      <button type="button" class="botao claro" data-repetir>Repetir 1º mês em todos</button>
+      <button class="botao">Salvar assentos</button>
+    </div>
+    <p class="ajuda">Para remover um Dept Code, zere todos os meses e salve.
+      <span class="caixa restrito"></span> Alteração restrita (mês atual e próximo).</p>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

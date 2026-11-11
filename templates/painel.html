@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block titulo %}Painel{% endblock %}
+{% block conteudo %}
+<h1>Painel de ocupação</h1>
+<p class="ajuda">
+  Mesma conta da planilha de capacidade: <b>Res</b> = assentos reservados
+  (status Confirmado e Fila mensal), <b>Avai</b> = capacidade − reservado.
+  Em vermelho: reservado acima da capacidade.
+</p>
+
+{% if not linhas %}
+  <div class="vazio">
+    Nenhum local cadastrado ainda. Use <a href="{{ url_for('importar') }}">Importar</a>
+    com o relatório do CMAP, ou rode <code>python dados_exemplo.py</code> para testar.
+  </div>
+{% else %}
+<div class="rolagem">
+<table class="grade painel">
+  <thead>
+    <tr>
+      <th rowspan="2" class="fixa">Local</th>
+      <th rowspan="2">Total Seats</th>
+      {% for m in janela %}<th colspan="3" class="{{ 'restrito' if restrito(m) }}">{{ m.rotulo }}</th>{% endfor %}
+    </tr>
+    <tr>
+      {% for m in janela %}<th>Res</th><th>Avai</th><th>Occ</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in linhas %}
+    <tr>
+      <td class="fixa">
+        <span class="codigo">{{ l.local.location_id }}</span><br>{{ l.local.descricao }}
+      </td>
+      <td class="num">{{ l.local.capacidade or '—' }}</td>
+      {% for c in l.celulas %}
+        <td class="num">{{ c.res }}</td>
+        <td class="num {{ 'negativo' if c.disp is not none and c.disp < 0 }}">{{ '—' if c.disp is none else c.disp }}</td>
+        <td class="num pct">{{ '—' if c.pct is none else '{:.0%}'.format(c.pct) }}</td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td class="fixa">TOTAL (locais com capacidade)</td>
+      <td class="num">{{ totais[0].cap }}</td>
+      {% for t in totais %}
+        <td class="num">{{ t.res }}</td>
+        <td class="num {{ 'negativo' if t.disp < 0 }}">{{ t.disp }}</td>
+        <td class="num pct">{{ '—' if t.pct is none else '{:.0%}'.format(t.pct) }}</td>
+      {% endfor %}
+    </tr>
+  </tfoot>
+</table>
+</div>
+<p class="legenda"><span class="caixa restrito"></span> Alteração restrita (mês atual e próximo, como no CMAP)</p>
+{% endif %}
+{% endblock %}

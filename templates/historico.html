@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block titulo %}Histórico{% endblock %}
+{% block conteudo %}
+<h1>Histórico de alterações</h1>
+<p class="ajuda">Tudo o que é criado, alterado, importado ou excluído fica registrado aqui.</p>
+<table class="grade lista" data-filtravel>
+  <thead>
+    <tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Detalhe</th></tr>
+    <tr class="filtros">
+      {% for i in range(4) %}<th><input data-filtro="{{ i }}" aria-label="Filtrar coluna {{ i }}"></th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for h in itens %}
+    <tr><td>{{ h.quando }}</td><td>{{ h.quem }}</td><td>{{ h.acao }}</td><td>{{ h.detalhe }}</td></tr>
+    {% else %}
+    <tr><td colspan="4" class="vazio">Nada registrado ainda.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
