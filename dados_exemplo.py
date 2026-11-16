@@ -65,10 +65,15 @@ def carregar_forecast(janela):
     for lob, conta, end, andar, carga, mop, home, staff, mas, cresce in FORECAST:
         frentes.append({
             "lob": lob, "act_id": "W0EXEMP", "conta": conta, "endereco": end, "andar": andar,
+            "gerencia": "GESTOR A" if lob in ("LOB EXEMPLO A", "LOB EXEMPLO B") else "GESTOR B",
             "location_id": forecast.local_do_endereco(end, andar),
             "carga": carga, "fator": 2 if carga == "6H20" else 1,
             "valores": {m.chave: {"mop": mop + cresce * i, "home": home, "staff_ic": staff,
-                                  "staff_ho": 0} for i, m in enumerate(janela)}})
+                                  "staff_ho": 0,
+                                  # 6H20: divide os presenciais entre manhã e tarde
+                                  "ic_manha": (mop - home) * 0.6 if carga == "6H20" else mop - home,
+                                  "ic_tarde": (mop - home) * 0.4 if carga == "6H20" else 0}
+                        for i, m in enumerate(janela)}})
     subir.salvar_forecast(frentes, ["Exemplo de aviso: FATOR PA diferente da regra."],
                           "FORECAST_EXEMPLO.xlsx")
     con = banco.db()

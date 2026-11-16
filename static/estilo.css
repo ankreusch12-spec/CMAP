@@ -161,3 +161,25 @@ details.outros summary { cursor: pointer; color: var(--suave); }
 .status-nova { background: var(--cabecalho); }
 tr.falta td:first-child { border-left: 3px solid var(--negativo-texto); }
 td.detalhe { font-size: 12px; max-width: 520px; }
+
+/* Gestores: "Resumo CMAP - Ocupação prédios" */
+.titulo-gestor { background: #3f4247; color: #fff; padding: 8px 12px; margin: 28px 0 0; font-size: 17px; letter-spacing: .3px; }
+.titulo-gestor .ajuda { color: #d5d8dd; font-weight: 400; }
+.resumo th, .resumo td { padding: 4px 10px; font-size: 13px; }
+.resumo thead th { background: #5a5e64 !important; color: #fff; text-align: center; }
+.resumo thead th.fixa { text-align: left; }
+.resumo .cab-conta th { font-size: 14px; }
+.resumo .cab-part th { font-weight: 400; font-size: 11px; text-transform: uppercase; max-width: 180px; white-space: normal; }
+.resumo .cab-part textarea { width: 160px; font: inherit; text-transform: none; }
+.resumo td.num { text-align: center; }
+.resumo td.fixa { min-width: 300px; }
+.resumo tbody.bloco-staff tr:first-child td, .resumo tbody.bloco-total tr:first-child td { border-top: 6px solid var(--fundo); }
+.resumo tbody.bloco-total td { font-weight: 600; background: var(--barra); }
+.resumo .col-total { font-weight: 700; border-left: 2px solid var(--borda); }
+.resumo td.do-forecast { font-style: italic; color: var(--suave); }
+.resumo tr.linha-pct td { font-weight: 700; }
+.pct.ok { background: var(--ok); color: var(--ok-texto); }
+.pct.sobra { background: var(--negativo); color: var(--negativo-texto); }
+.pct.falta { background: #fff1c2; color: #7a4d00; }
+span.pct { padding: 1px 6px; border-radius: 3px; }
+@media (prefers-color-scheme: dark) { .pct.falta { background: #4a3a10; color: #ffd98a; } }

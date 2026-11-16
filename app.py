@@ -11,6 +11,7 @@ Mapa do código:
     banco.py      -> banco de dados (SQLite) e consultas
     forecast.py   -> lê o FORECAST OFICIAL e aplica as regras (6H20 ÷ 2, arredonda p/ cima)
     subir.py      -> "O que subir no CMAP": forecast × controle e os lançamentos
+    gestores.py   -> "Resumo CMAP - Ocupação prédios" por gestor
     planilhas.py  -> importar / exportar Excel no formato do CMAP
     meses.py      -> janela de 12 meses (Nov-2026 ... Oct-2027)
     seguranca.py  -> proteções (CSRF, só acesso local, cabeçalhos)
@@ -26,6 +27,7 @@ from flask import (Flask, abort, flash, redirect, render_template, request,
 
 import banco
 import forecast
+import gestores
 import meses
 import planilhas
 import seguranca
@@ -305,6 +307,52 @@ def registrar_rotas(app: Flask):
         else:
             flash("Nada para lançar nessa reserva (já está igual ao forecast).", "erro")
         return redirect(url_for("o_que_subir"))
+
+    # ------------------------------------------------------------ GESTORES
+    @app.get("/gestores")
+    def visao_gestores():
+        janela = meses.janela()
+        chave = request.args.get("mes", janela[0].chave)
+        mes = next((m for m in janela if m.chave == chave), janela[0])
+        gerente = request.args.get("gerente", "")
+        blocos = [b for b in gestores.visao(mes) if not gerente or b["gerente"] == gerente]
+        return render_template("gestores.html", janela=janela, mes=mes, gerente=gerente,
+                               lista_gerentes=gestores.gerentes(), blocos=blocos,
+                               editar=request.args.get("editar") == "1",
+                               categorias=gestores.CATEGORIAS_STAFF, faixa=gestores.faixa,
+                               info=subir.info_forecast())
+
+    @app.post("/gestores/detalhe")
+    def salvar_detalhe():
+        volta = url_for("visao_gestores", mes=request.form.get("mes", ""),
+                        gerente=request.form.get("gerente", ""), editar=1)
+        try:
+            project_id = codigo("project_id")
+            location_id = texto("location_id")
+            particularidades = texto("particularidades", obrigatorio=False)
+            numeros = {}
+            for campo, rotulo in gestores.CATEGORIAS_STAFF:
+                bruto = request.form.get(campo, "").strip() or "0"
+                if not bruto.isdigit() or int(bruto) > 1000:
+                    raise ValueError(f"{rotulo}: número inválido “{bruto}”.")
+                numeros[campo] = int(bruto)
+        except ValueError as erro:
+            flash(str(erro), "erro")
+            return redirect(volta)
+        con = banco.db()
+        con.execute("""INSERT INTO detalhe_reserva (project_id, location_id, particularidades,
+                           supervisores, plan_wfm, qualidade, gerentes)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT (project_id, location_id) DO UPDATE SET
+                         particularidades = excluded.particularidades,
+                         supervisores = excluded.supervisores, plan_wfm = excluded.plan_wfm,
+                         qualidade = excluded.qualidade, gerentes = excluded.gerentes""",
+                    (project_id, location_id, particularidades, *numeros.values()))
+        banco.registrar("Detalhe do gestor salvo", f"{project_id} / {location_id} — staff "
+                        + ", ".join(f"{k} {v}" for k, v in numeros.items()))
+        con.commit()
+        flash("Particularidades e staff salvos.", "ok")
+        return redirect(volta)
 
     # ------------------------------------------------------------ FRENTES (de-para LOB -> MAS)
     @app.get("/frentes")

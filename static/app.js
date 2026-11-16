@@ -7,7 +7,15 @@ document.addEventListener("DOMContentLoaded", () => {
   abas();
   confirmacoes();
   gradeDeAssentos();
+  autoEnviar();
 });
+
+// 5) Filtros que se aplicam sozinhos ao trocar a opção (tela Gestores).
+function autoEnviar() {
+  document.querySelectorAll("form[data-auto-enviar] select").forEach((campo) => {
+    campo.addEventListener("change", () => campo.form.submit());
+  });
+}
 
 // 1) Caixinhas de filtro embaixo de cada coluna (igual às do CMAP).
 function filtrosDeColuna() {

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block titulo %}Gestores{% endblock %}
+
+{% macro pct(valor) -%}
+  {{ '-' if valor is none else '{:.1%}'.format(valor).replace('.', ',') }}
+{%- endmacro %}
+
+{% block conteudo %}
+<h1>Resumo CMAP - Ocupação prédios</h1>
+
+<form method="get" class="formulario linha" data-auto-enviar>
+  <label>Gestor
+    <select name="gerente">
+      <option value="">Todos</option>
+      {% for g in lista_gerentes %}<option {{ 'selected' if g == gerente }}>{{ g }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Mês
+    <select name="mes">
+      {% for m in janela %}<option value="{{ m.chave }}" {{ 'selected' if m == mes }}>{{ m.rotulo }}</option>{% endfor %}
+    </select>
+  </label>
+  {% if editar %}<input type="hidden" name="editar" value="1">{% endif %}
+  <button class="botao claro">Ver</button>
+  {% if editar %}
+    <a class="botao claro" href="{{ url_for('visao_gestores', mes=mes.chave, gerente=gerente) }}">Concluir edição</a>
+  {% else %}
+    <a class="botao claro" href="{{ url_for('visao_gestores', mes=mes.chave, gerente=gerente, editar=1) }}">Editar particularidades e staff</a>
+  {% endif %}
+</form>
+
+<p class="ajuda">
+  <b>PA's ocupadas</b> = regra do forecast (MOP − Home, ÷ 2 nas frentes 6H20, arredondado para cima) ·
+  <b>Disponíveis (reservadas)</b> = o que está no CMAP neste mês (PRODUCAGENT-DIR / TEAMLEADER-DIR) ·
+  Manhã/Tarde aparecem só nas frentes 6H20.
+  Staff em <i>itálico</i> = sem detalhe digitado, veio do total de STAFF do forecast.
+  Cores: <span class="pct ok">90–100%</span> <span class="pct sobra">abaixo de 90%</span>
+  <span class="pct falta">acima de 100%</span>.
+</p>
+
+{% if not info %}
+  <div class="vazio">Importe o forecast em <a href="{{ url_for('importar') }}">Importar</a> para ver os gestores.</div>
+{% elif not blocos %}
+  <div class="vazio">Nenhuma frente com MAS nos locais que você acompanha.
+    Confira <a href="{{ url_for('frentes') }}">Frentes</a>.</div>
+{% endif %}
+
+{% for b in blocos %}
+<h2 class="titulo-gestor">RESUMO CMAP - OCUPAÇÃO PRÉDIOS - OPERAÇÕES {{ b.gerente }}
+  <span class="ajuda">· {{ mes.rotulo }}</span></h2>
+<div class="rolagem">
+<table class="grade resumo">
+  <thead>
+    <tr class="cab-conta">
+      <th class="fixa">CONTA</th>
+      {% for c in b.colunas %}<th title="{{ c.project_id }} · {{ c.lobs|join(' · ') }}">{{ c.titulo }}</th>{% endfor %}
+      <th class="col-total">TOTAL</th>
+    </tr>
+    <tr>
+      <th class="fixa">SITE ATUAL</th>
+      {% for c in b.colunas %}<th>{{ c.site }}</th>{% endfor %}
+      <th class="col-total"></th>
+    </tr>
+    <tr class="cab-part">
+      <th class="fixa">PARTICULARIDADES CONTA</th>
+      {% for c in b.colunas %}
+        {% set fid = 'd' ~ loop.index ~ '-' ~ b.gerente|replace(' ', '') %}
+        <th>
+          {% if editar %}
+            <form id="{{ fid }}" method="post" action="{{ url_for('salvar_detalhe') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="project_id" value="{{ c.project_id }}">
+              <input type="hidden" name="location_id" value="{{ c.location_id }}">
+              <input type="hidden" name="mes" value="{{ mes.chave }}">
+              <input type="hidden" name="gerente" value="{{ gerente }}">
+              <textarea name="particularidades" maxlength="120" rows="3">{{ c.particularidades }}</textarea>
+              <button class="botao pequeno">Salvar</button>
+            </form>
+          {% else %}{{ c.particularidades }}{% endif %}
+        </th>
+      {% endfor %}
+      <th class="col-total"></th>
+    </tr>
+  </thead>
+
+  <tbody>
+    {% for rotulo, campo in [("HC's TOTAL", 'hc'), ("HCs - Manhã (6h20)", 'manha'), ("HCs - Tarde (6h20)", 'tarde'), ("HCs - Home Office", 'home'), ("PA's Operação - Ocupadas", 'ag_ocup'), ("PA's Operação - Disponíveis (Reservadas)", 'ag_disp')] %}
+    <tr><td class="fixa">{{ rotulo }}</td>
+      {% for c in b.colunas %}<td class="num">{{ c[campo] }}</td>{% endfor %}
+      <td class="num col-total">{{ b.total[campo] }}</td></tr>
+    {% endfor %}
+    <tr class="linha-pct"><td class="fixa">Ocupação Operação</td>
+      {% for c in b.colunas %}<td class="num pct {{ faixa(c.ag_pct) }}">{{ pct(c.ag_pct) }}</td>{% endfor %}
+      <td class="num col-total pct {{ faixa(b.total.ag_pct) }}">{{ pct(b.total.ag_pct) }}</td></tr>
+  </tbody>
+
+  <tbody class="bloco-staff">
+    {% for campo, rotulo in categorias %}
+    <tr><td class="fixa">{{ rotulo }}</td>
+      {% for c in b.colunas %}
+        {% set fid = 'd' ~ loop.index ~ '-' ~ b.gerente|replace(' ', '') %}
+        <td class="num">
+          {% if editar %}<input form="{{ fid }}" name="{{ campo }}" value="{{ c.staff[campo] }}" inputmode="numeric" pattern="[0-9]*" class="qtd">
+          {% else %}{{ c.staff[campo] }}{% endif %}
+        </td>
+      {% endfor %}
+      <td class="num col-total">{{ b.total.staff[campo] }}</td></tr>
+    {% endfor %}
+    <tr><td class="fixa">PA's Staff's - Ocupadas</td>
+      {% for c in b.colunas %}<td class="num {{ 'do-forecast' if c.staff_do_forecast }}">{{ c.st_ocup }}</td>{% endfor %}
+      <td class="num col-total">{{ b.total.st_ocup }}</td></tr>
+    <tr><td class="fixa">PA's Staff's - Disponíveis</td>
+      {% for c in b.colunas %}<td class="num">{{ c.st_disp }}</td>{% endfor %}
+      <td class="num col-total">{{ b.total.st_disp }}</td></tr>
+    <tr class="linha-pct"><td class="fixa">Ocupação Staff's</td>
+      {% for c in b.colunas %}<td class="num pct {{ faixa(c.st_pct) }}">{{ pct(c.st_pct) }}</td>{% endfor %}
+      <td class="num col-total pct {{ faixa(b.total.st_pct) }}">{{ pct(b.total.st_pct) }}</td></tr>
+  </tbody>
+
+  <tbody class="bloco-total">
+    <tr><td class="fixa">Posições totais (Operações + Staff) - Ocupadas</td>
+      {% for c in b.colunas %}<td class="num">{{ c.tot_ocup }}</td>{% endfor %}
+      <td class="num col-total">{{ b.total.tot_ocup }}</td></tr>
+    <tr><td class="fixa">Posições totais (Operações + Staff) - Disponíveis</td>
+      {% for c in b.colunas %}<td class="num">{{ c.tot_disp }}</td>{% endfor %}
+      <td class="num col-total">{{ b.total.tot_disp }}</td></tr>
+    <tr class="linha-pct"><td class="fixa">% Ocupação Geral (Operações + Staff)</td>
+      {% for c in b.colunas %}<td class="num pct {{ faixa(c.tot_pct) }}">{{ pct(c.tot_pct) }}</td>{% endfor %}
+      <td class="num col-total pct {{ faixa(b.total.tot_pct) }}">{{ pct(b.total.tot_pct) }}</td></tr>
+  </tbody>
+</table>
+</div>
+{% endfor %}
+{% endblock %}

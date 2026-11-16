@@ -60,6 +60,7 @@ DADO_MOP = "mop (ativo + aviso previo)"
 DADOS_HOME = {"home manha", "home tarde"}
 DADO_STAFF_IC = "staff incompany"
 DADO_STAFF_HO = "staff home"
+DADOS_TURNO = {"incompany manha": "ic_manha", "incompany tarde": "ic_tarde"}
 CARGAS = {"6h20": 2, "7h12": 1}
 
 
@@ -108,7 +109,7 @@ def ler(arquivo):
         linhas = livro["BASE"].iter_rows(values_only=True)
         cab = [normalizar(c) if not isinstance(c, datetime) else c for c in next(linhas)]
         col = {nome: cab.index(nome) for nome in
-               ("lob wfm", "dado", "endereco integration", "andar", "conta", "act id")
+               ("lob wfm", "dado", "endereco integration", "andar", "conta", "act id", "gerencia")
                if nome in cab}
         if {"lob wfm", "dado", "endereco integration"} - col.keys():
             raise ErroForecast("A aba BASE não tem as colunas LOB WFM, DADO e ENDEREÇO INTEGRATION.")
@@ -127,17 +128,19 @@ def ler(arquivo):
                 "lob": lob, "endereco": endereco, "andar": andar,
                 "act_id": str(r[col["act id"]] or "").strip() if "act id" in col else "",
                 "conta": str(r[col["conta"]] or "").strip() if "conta" in col else "",
+                "gerencia": str(r[col["gerencia"]] or "").strip() if "gerencia" in col else "",
                 "location_id": local_do_endereco(endereco, andar),
                 "carga": None, "fator_arquivo": None,
-                "valores": defaultdict(lambda: {"mop": 0.0, "home": 0.0,
-                                                "staff_ic": 0.0, "staff_ho": 0.0}),
+                "valores": defaultdict(lambda: {"mop": 0.0, "home": 0.0, "staff_ic": 0.0,
+                                                "staff_ho": 0.0, "ic_manha": 0.0, "ic_tarde": 0.0}),
             })
             if dado in CARGAS:
                 f["carga"] = dado.upper()
             elif dado == "fator pa":
                 f["fator_arquivo"] = next((_numero(r[i]) for i in col_meses if r[i] not in (None, "")), None)
             campo = ("mop" if dado == DADO_MOP else "home" if dado in DADOS_HOME else
-                     "staff_ic" if dado == DADO_STAFF_IC else "staff_ho" if dado == DADO_STAFF_HO else None)
+                     "staff_ic" if dado == DADO_STAFF_IC else "staff_ho" if dado == DADO_STAFF_HO else
+                    DADOS_TURNO.get(dado))
             if campo:
                 for i, mes in col_meses.items():
                     f["valores"][mes][campo] += _numero(r[i] if i < len(r) else 0)

@@ -142,3 +142,50 @@ def test_forecast_sem_aba_base(cliente, tmp_path):
         r = cliente.post("/importar/forecast", data={"csrf_token": cliente.token, "arquivo": (f, "x.xlsx")},
                          content_type="multipart/form-data", follow_redirects=True)
     assert "aba BASE" in r.get_data(as_text=True)
+
+
+def test_visao_por_gestor(cliente, app, tmp_path):
+    t = cliente.token
+    with app.app_context():
+        con = banco.db()
+        for loc in ("BR-CUR-MALDE-02", "BR-WFH-DIRETO"):
+            con.execute("INSERT INTO locais (location_id, descricao) VALUES (?, ?)", (loc, loc))
+        con.commit()
+    caminho = tmp_path / "f.xlsx"
+    forecast_ficticio(caminho)
+    with caminho.open("rb") as f:
+        cliente.post("/importar/forecast", data={"csrf_token": t, "arquivo": (f, "f.xlsx")},
+                     content_type="multipart/form-data")
+    for lob in ("FRENTE MEIO PERIODO", "FRENTE INTEGRAL"):
+        cliente.post("/frentes", data={"csrf_token": t, "lob": lob, "project_id": "EXEMPLO100",
+                                       "project_name": "P_Z", "cliente": "Z"})
+    # reserva no CMAP com 20 agentes e 2 staff -> 21 ocupadas / 20 = 105%
+    cliente.post("/subir/lancar", data={"csrf_token": t, "project_id": "EXEMPLO100",
+                                        "location_id": "BR-CUR-MALDE-02"})
+    with app.app_context():
+        import gestores
+        bloco = gestores.visao(MES)[0]
+        assert bloco["gerente"] == "GER"
+        col = next(c for c in bloco["colunas"] if c["location_id"] == "BR-CUR-MALDE-02")
+        assert col["site"] == "M3 - 1º, 2º"
+        assert (col["hc"], col["home"]) == (37, 3)            # MOP 27 + 10; home 3
+        assert (col["ag_ocup"], col["ag_disp"]) == (21, 21)   # já lançado: 100%
+        assert col["staff_do_forecast"] and col["st_ocup"] == 2
+        assert gestores.faixa(col["ag_pct"]) == "ok"
+        assert gestores.andar_curto("TORRE A - 2ª") == "Torre A - 2º"
+
+    # detalhe digitado substitui o staff do forecast
+    cliente.post("/gestores/detalhe", data={"csrf_token": t, "project_id": "EXEMPLO100",
+                                            "location_id": "BR-CUR-MALDE-02",
+                                            "particularidades": "Ambientação", "supervisores": "3",
+                                            "plan_wfm": "1", "qualidade": "", "gerentes": "0"})
+    html = cliente.get(f"/gestores?mes={MES.chave}").get_data(as_text=True)
+    assert "OPERAÇÕES GER" in html and "Ambientação" in html
+    with app.app_context():
+        col = next(c for c in gestores.visao(MES)[0]["colunas"] if c["location_id"] == "BR-CUR-MALDE-02")
+        assert col["st_ocup"] == 4 and not col["staff_do_forecast"]
+    # número inválido é recusado
+    r = cliente.post("/gestores/detalhe", data={"csrf_token": t, "project_id": "EXEMPLO100",
+                                                "location_id": "BR-CUR-MALDE-02", "supervisores": "-1"},
+                     follow_redirects=True)
+    assert "número inválido" in r.get_data(as_text=True)

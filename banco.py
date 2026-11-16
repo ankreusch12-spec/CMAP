@@ -87,7 +87,8 @@ CREATE TABLE IF NOT EXISTS frentes (
     conta         TEXT NOT NULL DEFAULT '',
     project_id    TEXT NOT NULL DEFAULT '', -- MAS, ex.: WHBRASIL006
     project_name  TEXT NOT NULL DEFAULT '',
-    cliente       TEXT NOT NULL DEFAULT ''
+    cliente       TEXT NOT NULL DEFAULT '',
+    gerencia      TEXT NOT NULL DEFAULT ''  -- gestor (coluna GERENCIA do forecast)
 );
 
 -- Último forecast importado (uma linha por frente, local e mês).
@@ -102,7 +103,22 @@ CREATE TABLE IF NOT EXISTS forecast (
     mop          REAL NOT NULL,
     home         REAL NOT NULL,
     staff_ic     REAL NOT NULL,
-    staff_ho     REAL NOT NULL
+    staff_ho     REAL NOT NULL,
+    ic_manha     REAL NOT NULL DEFAULT 0,    -- INCOMPANY MANHÃ
+    ic_tarde     REAL NOT NULL DEFAULT 0     -- INCOMPANY TARDE
+);
+
+-- Visão por gestor: particularidades e staff detalhado de cada reserva (MAS + local).
+-- O forecast só traz o total de staff; o detalhe é digitado na tela Gestores.
+CREATE TABLE IF NOT EXISTS detalhe_reserva (
+    project_id       TEXT NOT NULL,
+    location_id      TEXT NOT NULL,
+    particularidades TEXT NOT NULL DEFAULT '',
+    supervisores     INTEGER NOT NULL DEFAULT 0,
+    plan_wfm         INTEGER NOT NULL DEFAULT 0,
+    qualidade        INTEGER NOT NULL DEFAULT 0,
+    gerentes         INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (project_id, location_id)
 );
 CREATE TABLE IF NOT EXISTS forecast_info (
     id            INTEGER PRIMARY KEY CHECK (id = 1),
@@ -166,8 +182,17 @@ def atualizar_banco_antigo(con):
     Bancos criados na 1ª versão não têm a coluna `ativo`.
     Aqui ela é criada e já marca só os MEUS_LOCAIS como acompanhados.
     """
-    colunas = {c["name"] for c in con.execute("PRAGMA table_info(locais)")}
-    if "ativo" not in colunas:
+    def colunas(tabela):
+        return {c["name"] for c in con.execute(f"PRAGMA table_info({tabela})")}
+
+    # versão 4: gestor nas frentes e turnos no forecast
+    if "gerencia" not in colunas("frentes"):
+        con.execute("ALTER TABLE frentes ADD COLUMN gerencia TEXT NOT NULL DEFAULT ''")
+    for nova in ("ic_manha", "ic_tarde"):
+        if nova not in colunas("forecast"):
+            con.execute(f"ALTER TABLE forecast ADD COLUMN {nova} REAL NOT NULL DEFAULT 0")
+
+    if "ativo" not in colunas("locais"):
         con.execute("ALTER TABLE locais ADD COLUMN ativo INTEGER NOT NULL DEFAULT 1")
         for linha in con.execute("SELECT location_id FROM locais").fetchall():
             con.execute("UPDATE locais SET ativo = ? WHERE location_id = ?",

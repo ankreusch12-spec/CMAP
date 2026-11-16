@@ -26,16 +26,17 @@ def salvar_forecast(frentes, avisos, nome_arquivo: str):
     con = banco.db()
     con.execute("DELETE FROM forecast")
     for f in frentes:
-        con.execute("""INSERT INTO frentes (lob, act_id, conta) VALUES (?, ?, ?)
+        con.execute("""INSERT INTO frentes (lob, act_id, conta, gerencia) VALUES (?, ?, ?, ?)
                        ON CONFLICT (lob) DO UPDATE SET act_id = excluded.act_id,
-                                                       conta = excluded.conta""",
-                    (f["lob"], f["act_id"], f["conta"]))
+                         conta = excluded.conta, gerencia = excluded.gerencia""",
+                    (f["lob"], f["act_id"], f["conta"], f.get("gerencia", "")))
         con.executemany(
             """INSERT INTO forecast (lob, endereco, andar, location_id, carga, fator, mes,
-                                     mop, home, staff_ic, staff_ho)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                     mop, home, staff_ic, staff_ho, ic_manha, ic_tarde)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [(f["lob"], f["endereco"], f["andar"], f["location_id"], f["carga"], f["fator"],
-              mes, v["mop"], v["home"], v["staff_ic"], v["staff_ho"])
+              mes, v["mop"], v["home"], v["staff_ic"], v["staff_ho"],
+              v.get("ic_manha", 0), v.get("ic_tarde", 0))
              for mes, v in f["valores"].items()])
     con.execute("""INSERT INTO forecast_info (id, arquivo, importado_em, quem, avisos)
                    VALUES (1, ?, ?, ?, ?)
@@ -51,14 +52,15 @@ def salvar_forecast(frentes, avisos, nome_arquivo: str):
 def frentes_salvas():
     """Remonta as frentes (mesmo formato de forecast.ler) a partir do banco."""
     frentes: dict[tuple, dict] = {}
-    for r in banco.db().execute("SELECT f.*, fr.conta FROM forecast f "
+    for r in banco.db().execute("SELECT f.*, fr.conta, fr.gerencia FROM forecast f "
                                 "LEFT JOIN frentes fr ON fr.lob = f.lob"):
         f = frentes.setdefault((r["lob"], r["endereco"], r["andar"]), {
             "lob": r["lob"], "endereco": r["endereco"], "andar": r["andar"],
             "location_id": r["location_id"], "carga": r["carga"], "fator": r["fator"],
-            "conta": r["conta"] or "", "valores": {}})
+            "conta": r["conta"] or "", "gerencia": r["gerencia"] or "", "valores": {}})
         f["valores"][r["mes"]] = {"mop": r["mop"], "home": r["home"],
-                                  "staff_ic": r["staff_ic"], "staff_ho": r["staff_ho"]}
+                                  "staff_ic": r["staff_ic"], "staff_ho": r["staff_ho"],
+                                  "ic_manha": r["ic_manha"], "ic_tarde": r["ic_tarde"]}
     return list(frentes.values())
 
 
