@@ -9,7 +9,7 @@ e abrir no navegador:  http://127.0.0.1:5000
 Mapa do código:
     app.py        -> as páginas (rotas) e o que cada uma faz   <- você está aqui
     banco.py      -> banco de dados (SQLite) e consultas
-    forecast.py   -> lê o FORECAST OFICIAL e aplica as regras (6H20 ÷ 2, arredonda p/ cima)
+    forecast.py   -> lê o FORECAST OFICIAL e aplica as regras (6H20 = maior turno, arredonda p/ cima)
     subir.py      -> "O que subir no CMAP": forecast × controle e os lançamentos
     gestores.py   -> "Resumo CMAP - Ocupação prédios" por gestor
     planilhas.py  -> importar / exportar Excel no formato do CMAP

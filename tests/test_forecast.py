@@ -191,3 +191,16 @@ def test_visao_por_gestor(cliente, app, tmp_path):
                                                 "location_id": "BR-CUR-MALDE-02", "supervisores": "-1"},
                      follow_redirects=True)
     assert "número inválido" in r.get_data(as_text=True)
+
+
+def test_maior_turno_nas_frentes_6h20():
+    seis = {"fator": 2}
+    # exemplo do quadro (CRF 3): 60 HCs, 45 manhã, 15 tarde -> 45 PAs
+    assert forecast.pas_no_predio(seis, {"mop": 60, "home": 0, "ic_manha": 45, "ic_tarde": 15}) == 45
+    # MOP menor que o planejado: reparte na proporção (77 × 46 ÷ 87 = 40,7)
+    assert round(forecast.pas_no_predio(seis, {"mop": 92, "home": 15, "ic_manha": 46,
+                                               "ic_tarde": 41}), 1) == 40.7
+    # sem manhã/tarde no arquivo: ÷ 2
+    assert forecast.pas_no_predio(seis, {"mop": 27, "home": 0}) == 13.5
+    # integral: MOP − Home
+    assert forecast.pas_no_predio({"fator": 1}, {"mop": 10, "home": 3, "ic_manha": 9}) == 7

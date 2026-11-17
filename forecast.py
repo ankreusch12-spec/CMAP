@@ -9,10 +9,14 @@ indicador (coluna DADO) e uma coluna por mês. Usamos só estas linhas:
     HOME MANHÃ / HOME TARDE     -> quantos do MOP trabalham de casa
     STAFF INCOMPANY / STAFF HOME
 
-REGRAS (combinadas com a Anna em 11/11/2026):
-  • No prédio:  PAs = (MOP − Home) ÷ fator
-                fator = 2 para frentes 6H20 (duas pessoas dividem a PA)
-                fator = 1 para integral (7H12)
+REGRAS (combinadas com a Anna em 11/11/2026; maior turno em 17/11/2026):
+  • No prédio:  presencial = MOP − Home
+                integral (7H12): PAs = presencial
+                6H20: manhã e tarde usam a MESMA PA, então conta o MAIOR TURNO.
+                      O presencial é dividido entre manhã e tarde na proporção das
+                      linhas INCOMPANY MANHÃ / TARDE do forecast:
+                      PAs = presencial × maior turno ÷ (manhã + tarde)
+                      (sem manhã/tarde no arquivo: presencial ÷ 2)
   • Home:       vai numa reserva separada em WAH Brasil Direto WFH (_HO).
   • Staff:      entra como TEAMLEADER-DIR (só códigos diretos).
   • Arredondamento: SEMPRE PARA CIMA, depois de somar tudo do mesmo
@@ -173,13 +177,28 @@ def ler(arquivo):
             avisos.append(f"{f['lob']}: sem linha 6H20/7H12 — considerei integral (fator 1).")
         if f["fator_arquivo"] not in (None, f["fator"]):
             avisos.append(f"{f['lob']}: FATOR PA no arquivo é {f['fator_arquivo']:g}, "
-                          f"mas pela regra ({f['carga']}) usei {f['fator']}.")
+                          f"mas é {f['carga']}: calculei "
+                          + ("pelo maior turno (manhã/tarde)." if f["fator"] == 2 else "como integral (1 PA por pessoa)."))
         if not f["location_id"]:
             avisos.append(f"{f['lob']}: endereço “{f['endereco']}” não reconhecido.")
     return list(frentes.values()), avisos
 
 
 # ================================================================ CALCULAR
+
+def pas_no_predio(frente: dict, v: dict) -> float:
+    """
+    PAs que a frente ocupa no prédio num mês (antes de arredondar).
+    Exemplo 6H20: MOP 60, home 0, manhã 45, tarde 15 -> 60 × 45 ÷ 60 = 45 PAs.
+    """
+    presencial = max(v["mop"] - min(v["home"], v["mop"]), 0)
+    if frente["fator"] != 2:                          # integral: 1 pessoa = 1 PA
+        return presencial
+    manha, tarde = v.get("ic_manha", 0), v.get("ic_tarde", 0)
+    if manha + tarde <= 0:                            # sem divisão no arquivo
+        return presencial / 2
+    return presencial * max(manha, tarde) / (manha + tarde)
+
 
 def calcular(frentes, de_para: dict, janela: list[meses.Mes], acompanho) -> dict:
     """
@@ -205,7 +224,7 @@ def calcular(frentes, de_para: dict, janela: list[meses.Mes], acompanho) -> dict
             if f["location_id"] == LOCAL_HOME:          # frente 100% home office
                 destinos = [(LOCAL_HOME, v["mop"], v["staff_ic"] + v["staff_ho"])]
             else:
-                destinos = [(f["location_id"], (v["mop"] - home) / f["fator"], v["staff_ic"]),
+                destinos = [(f["location_id"], pas_no_predio(f, v), v["staff_ic"]),
                             (LOCAL_HOME, home, v["staff_ho"])]
             for location_id, agentes, staff in destinos:
                 if not acompanho(location_id) or (agentes <= 0 and staff <= 0):

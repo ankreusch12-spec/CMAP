@@ -11,7 +11,8 @@
 {% else %}
 <p class="ajuda">
   Forecast: <b>{{ info.arquivo }}</b> · importado em {{ info.importado_em }} por {{ info.quem }}.<br>
-  Regra: PAs no prédio = (MOP − Home) ÷ 2 nas frentes <b>6H20</b> e ÷ 1 nas integrais, somado por
+  Regra: PAs no prédio = MOP − Home nas integrais; nas frentes <b>6H20</b> conta o <b>maior turno</b>
+  (manhã e tarde dividem a PA; o MOP é repartido na proporção manhã/tarde do forecast). Somado por
   MAS + local e <b>arredondado para cima</b>. Home vai para <i>WAH Brasil Direto WFH</i> (_HO).
   Staff entra como <b>TEAMLEADER-DIR</b>.
 </p>

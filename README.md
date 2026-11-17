@@ -93,7 +93,7 @@ Home manhã/tarde e Staff incompany/home.
 
 | O quê | Regra |
 |---|---|
-| PAs no prédio (PRODUCAGENT-DIR) | (MOP − Home) ÷ **2** nas frentes 6H20; ÷ **1** nas integrais (7H12) |
+| PAs no prédio (PRODUCAGENT-DIR) | Integrais (7H12): MOP − Home. Frentes **6H20**: o **maior turno** — manhã e tarde dividem a PA; o MOP − Home é repartido na proporção INCOMPANY MANHÃ/TARDE do forecast (sem essa divisão no arquivo: ÷ 2) |
 | Home office | reserva separada em *WAH Brasil Direto WFH* (`_HO`) com o Home |
 | Staff (TEAMLEADER-DIR) | Staff incompany no prédio; Staff home na reserva `_HO` |
 | Arredondamento | **sempre para cima**, depois de somar tudo do mesmo MAS + local |
