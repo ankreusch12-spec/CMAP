@@ -172,7 +172,9 @@ def test_visao_por_gestor(cliente, app, tmp_path):
         assert col["site"] == "M3 - 1º, 2º"
         assert (col["hc"], col["home"]) == (37, 3)            # MOP 27 + 10; home 3
         assert (col["ag_ocup"], col["ag_disp"]) == (21, 21)   # já lançado: 100%
-        assert col["staff_do_forecast"] and col["st_ocup"] == 2
+        # o lançamento gravou TEAMLEADER-DIR = 2 no CMAP: o staff vem de lá (supervisores)
+        assert col["staff_do_cmap"] and col["staff"]["supervisores"] == 2 and col["st_ocup"] == 2
+        assert col["st_disp"] == 2
         assert gestores.faixa(col["ag_pct"]) == "ok"
         assert gestores.andar_curto("TORRE A - 2ª") == "Torre A - 2º"
 
@@ -185,7 +187,7 @@ def test_visao_por_gestor(cliente, app, tmp_path):
     assert "OPERAÇÕES GER" in html and "Ambientação" in html
     with app.app_context():
         col = next(c for c in gestores.visao(MES)[0]["colunas"] if c["location_id"] == "BR-CUR-MALDE-02")
-        assert col["st_ocup"] == 4 and not col["staff_do_forecast"]
+        assert col["st_ocup"] == 4 and not col["staff_do_cmap"]
     # número inválido é recusado
     r = cliente.post("/gestores/detalhe", data={"csrf_token": t, "project_id": "EXEMPLO100",
                                                 "location_id": "BR-CUR-MALDE-02", "supervisores": "-1"},
@@ -264,3 +266,58 @@ def test_diagnostico_explica_por_que_nao_leu(tmp_path):
     achado, _ = forecast.diagnosticar(f'"{pasta}"')       # aceita o caminho com aspas
     assert achado.name.startswith("_FORECAST_OFICIAL")
     assert "não existe" in forecast.diagnosticar(str(tmp_path / "nada"))[1][0]
+
+
+def test_categorias_de_staff_do_cmap():
+    import gestores
+    assert gestores.categoria_staff("TEAMLEADER-DIR") == "supervisores"
+    assert gestores.categoria_staff("FLOORLEADER-DIR") == "supervisores"
+    assert gestores.categoria_staff("WFM-DIRECT") == "plan_wfm"
+    assert gestores.categoria_staff("QUALTRAIN-DIR") == "qualidade"
+    assert gestores.categoria_staff("QUALITY-DIRSITE") == "qualidade"
+    assert gestores.categoria_staff("OPERATSMGMT-DIR") == "gerentes"
+    assert gestores.categoria_staff("OPERATION-INDIR") is None      # indireto não entra
+    assert gestores.categoria_staff("PRODUCAGENT-DIR") is None      # agente não é staff
+    assert gestores.categoria_staff("PROGTRAIN-DIR") == "qualidade"
+    assert gestores.categoria_staff("TRANMONITOR-DIR") == "qualidade"
+    assert gestores.categoria_staff("AGENTAUDITO-DIR") == "qualidade"
+    assert gestores.categoria_staff("WFM-DIRBILLREG") == "plan_wfm"
+    assert gestores.categoria_staff("DIROPERATI-DIR") == "gerentes"
+    assert gestores.categoria_staff("OPERATIONS-DIR") == "gerentes"
+    assert gestores.categoria_staff("SENOPSMGMT-DIR") == "gerentes"
+    assert gestores.categoria_staff("MMSTEAMLEAD-DIR") == "supervisores"
+    assert gestores.categoria_staff("ADMINFACILITIES") is None      # sem DIR: não é direto
+    assert gestores.categoria_staff("DPEPMREG-DIR") == "outros"
+
+
+def test_sem_staff_no_forecast_nao_mexe_no_staff_do_cmap(cliente, app, tmp_path):
+    import subir
+    t = cliente.token
+    with app.app_context():
+        con = banco.db()
+        con.execute("INSERT INTO locais (location_id, descricao) VALUES ('BR-CUR-MALDE-02', 'M3')")
+        rid = con.execute("""INSERT INTO reservas (resv_desc, project_id, project_name, location_id,
+                             status, criado_em, criado_por) VALUES ('Z_MAL3', 'EXEMPLO200', 'P',
+                             'BR-CUR-MALDE-02', 'Confirmado', '2026-01-01', 'x')""").lastrowid
+        for m in meses.janela():                 # CMAP: 9 supervisores (2 shifts) e 50 agentes
+            con.execute("INSERT INTO assentos VALUES (?, 'TEAMLEADER-DIR', '', 'DED', ?, 5)", (rid, m.chave))
+            con.execute("INSERT INTO assentos VALUES (?, 'TEAMLEADER-DIR', '', 'NOT', ?, 4)", (rid, m.chave))
+            con.execute("INSERT INTO assentos VALUES (?, 'PRODUCAGENT-DIR', '', 'DED', ?, 50)", (rid, m.chave))
+        con.commit()
+    caminho = tmp_path / "f.xlsx"
+    forecast_ficticio(caminho)                   # FRENTE MEIO PERIODO: sem staff
+    with caminho.open("rb") as f:
+        cliente.post("/importar/forecast", data={"csrf_token": t, "arquivo": (f, "f.xlsx")},
+                     content_type="multipart/form-data")
+    cliente.post("/frentes", data={"csrf_token": t, "lob": "FRENTE MEIO PERIODO",
+                                   "project_id": "EXEMPLO200", "project_name": "", "cliente": "Z"})
+    with app.app_context():
+        item = next(i for i in subir.itens(meses.janela()) if i["project_id"] == "EXEMPLO200")
+        assert not item["usa_staff"] and item["meses"][0]["st_novo"] == 9
+    cliente.post("/subir/lancar", data={"csrf_token": t, "project_id": "EXEMPLO200",
+                                        "location_id": "BR-CUR-MALDE-02"})
+    with app.app_context():
+        shifts = banco.db().execute("""SELECT shift, qtd FROM assentos WHERE reserva_id = ?
+                    AND dept_code = 'TEAMLEADER-DIR' AND mes = ? ORDER BY shift""",
+                                    (rid, meses.atual().chave)).fetchall()
+        assert [tuple(x) for x in shifts] == [("DED", 5), ("NOT", 4)]   # intocado

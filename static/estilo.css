@@ -225,3 +225,4 @@ pre { background: var(--barra); padding: 8px 10px; border-radius: 4px; overflow-
 }
 .passos li.feito .marca-passo { background: var(--cnx-seafoam); color: var(--cnx-azul); }
 .passos li.feito b { color: var(--suave); }
+.resumo td.do-cmap, i.do-cmap { font-style: italic; color: var(--suave); }

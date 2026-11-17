@@ -31,6 +31,28 @@ CATEGORIAS_STAFF = [
     ("qualidade", "Staff - Qualidade"),
     ("gerentes", "Staff - Gerentes / Diretores"),
 ]
+# Linhas de staff do CMAP (Dept Code) em cada categoria do quadro.
+# Só entram códigos DIRETOS (com "DIR" no código, sem "INDIR"): pedido da Anna,
+# "no máximo o direto". Ex.: ADMINFACILITIES, HRGENERALIST, OPERATION-INDIR ficam de fora.
+PALAVRAS_STAFF = [
+    ("qualidade", ("QUAL", "TRAIN", "TRAN", "AUDIT", "EVALU")),   # qualidade, treinamento, monitoria
+    ("plan_wfm", ("WFM", "PLAN", "REPORT")),                       # planejamento / WFM / MIS
+    ("gerentes", ("MGMT", "MANAGER", "DIRECTOR", "DIROPER", "OPERATIONS-", "GERENT")),
+    ("supervisores", ("LEAD", "SUPERV", "COORD")),                 # team/floor leader
+]
+
+
+def categoria_staff(dept_code: str) -> str | None:
+    """'TEAMLEADER-DIR' -> 'supervisores'; agente, indireto ou não-direto -> None."""
+    d = str(dept_code or "").upper()
+    if d == forecast.DEPT_AGENTE or "INDIR" in d or "DIR" not in d:
+        return None
+    for categoria, palavras in PALAVRAS_STAFF:
+        if any(p in d for p in palavras):
+            return categoria
+    return "outros"                      # outro código direto de staff
+
+
 # Faixa "boa" de ocupação: 90% a 100%. Abaixo sobra PA; acima falta PA.
 META_MIN, META_MAX = 0.90, 1.00
 
@@ -56,15 +78,23 @@ def faixa(pct) -> str:
 
 
 def _reservado(project_id, location_id, mes: meses.Mes):
-    """PAs reservadas no CMAP (controle) neste mês: (agentes, staff)."""
+    """
+    PAs reservadas no CMAP (controle) neste mês:
+    (agentes, {categoria de staff: quantidade}).
+    """
     r = banco.db().execute(
         """SELECT a.dept_code, SUM(a.qtd) AS q FROM assentos a
            JOIN reservas r ON r.id = a.reserva_id
            WHERE r.project_id = ? AND r.location_id = ? AND r.status != 'Cancelado'
              AND a.mes = ? GROUP BY a.dept_code""",
         (project_id, location_id, mes.chave)).fetchall()
-    q = {x["dept_code"]: x["q"] for x in r}
-    return q.get(forecast.DEPT_AGENTE, 0), q.get(forecast.DEPT_STAFF, 0)
+    agentes, staff = 0, defaultdict(int)
+    for x in r:
+        if x["dept_code"] == forecast.DEPT_AGENTE:
+            agentes += x["q"]
+        elif categoria_staff(x["dept_code"]):
+            staff[categoria_staff(x["dept_code"])] += x["q"]
+    return agentes, staff
 
 
 def _detalhes():
@@ -123,10 +153,20 @@ def visao(mes: meses.Mes):
             if chave not in calc:                        # local que não acompanho
                 continue
             project_id, location_id = chave
-            res_ag, res_st = _reservado(project_id, location_id, mes)
+            res_ag, staff_cmap = _reservado(project_id, location_id, mes)
+            res_st = sum(staff_cmap.values())                 # todo staff direto reservado
             d = detalhes.get(chave)
-            staff_digitado = {k: (d[k] if d else 0) for k, _ in CATEGORIAS_STAFF}
-            staff_ocup = sum(staff_digitado.values()) or calc[chave]["staff"].get(mes.chave, 0)
+            digitado = {k: (d[k] if d else 0) for k, _ in CATEGORIAS_STAFF}
+            # Linhas de staff: o que você digitou na tela; sem nada digitado, o que está
+            # no CMAP (cada código na sua categoria).
+            staff_do_cmap = not sum(digitado.values())
+            staff_linhas = ({k: staff_cmap.get(k, 0) for k, _ in CATEGORIAS_STAFF} if staff_do_cmap
+                            else digitado)
+            staff_linhas["outros"] = staff_cmap.get("outros", 0) if staff_do_cmap else 0
+            staff_ocup = sum(staff_linhas.values())
+            staff_do_forecast = not staff_ocup and bool(calc[chave]["staff"].get(mes.chave, 0))
+            if staff_do_forecast:                             # nada no CMAP nem digitado
+                staff_ocup = calc[chave]["staff"][mes.chave]
             ag_ocup = calc[chave]["agentes"].get(mes.chave, 0)
             andares = sorted(a for a in b["andares"] if a != "HO") or ["HO"]
             colunas.append({
@@ -139,7 +179,8 @@ def visao(mes: meses.Mes):
                 "hc": round(b["hc"]), "manha": round(b["manha"]), "tarde": round(b["tarde"]),
                 "home": round(b["home"]),
                 "ag_ocup": ag_ocup, "ag_disp": res_ag, "ag_pct": _pct(ag_ocup, res_ag),
-                "staff": staff_digitado, "staff_do_forecast": not sum(staff_digitado.values()),
+                "staff": staff_linhas, "staff_do_cmap": staff_do_cmap,
+                "staff_digitado": digitado, "staff_do_forecast": staff_do_forecast,
                 "st_ocup": staff_ocup, "st_disp": res_st, "st_pct": _pct(staff_ocup, res_st),
                 "tot_ocup": ag_ocup + staff_ocup, "tot_disp": res_ag + res_st,
             })
@@ -162,7 +203,8 @@ def visao(mes: meses.Mes):
         total = {k: sum(c[k] for c in colunas) for k in
                  ("hc", "manha", "tarde", "home", "ag_ocup", "ag_disp", "st_ocup", "st_disp",
                   "tot_ocup", "tot_disp")}
-        total["staff"] = {k: sum(c["staff"][k] for c in colunas) for k, _ in CATEGORIAS_STAFF}
+        total["staff"] = {k: sum(c["staff"][k] for c in colunas)
+                          for k in [k for k, _ in CATEGORIAS_STAFF] + ["outros"]}
         for p in ("ag", "st", "tot"):
             total[f"{p}_pct"] = _pct(total[f"{p}_ocup"], total[f"{p}_disp"])
         blocos.append({"gerente": gerente, "colunas": colunas, "total": total})

@@ -33,7 +33,10 @@
   <b>PA's ocupadas</b> = regra do forecast (MOP − Home; nas frentes 6H20, o maior turno; arredondado para cima) ·
   <b>Disponíveis (reservadas)</b> = o que está no CMAP neste mês (PRODUCAGENT-DIR / TEAMLEADER-DIR) ·
   Manhã/Tarde aparecem só nas frentes 6H20.
-  Staff em <i>itálico</i> = sem detalhe digitado, veio do total de STAFF do forecast.
+  Staff em <i class="do-cmap">itálico</i> = veio do CMAP: TEAMLEADER/FLOORLEADER → supervisores,
+  WFM → plan, QUAL/TRAIN/monitoria/auditoria → qualidade, OPERATSMGMT/OPERATIONS → gerentes.
+  Só códigos diretos (com DIR); indiretos e de apoio não entram. Digitando em
+  “Editar particularidades e staff”, vale o que você digitou.
   Cores: <span class="pct ok">90–100%</span> <span class="pct sobra">abaixo de 90%</span>
   <span class="pct falta">acima de 100%</span>.
 </p>
@@ -99,13 +102,18 @@
     <tr><td class="fixa">{{ rotulo }}</td>
       {% for c in b.colunas %}
         {% set fid = 'd' ~ loop.index ~ '-' ~ b.gerente|replace(' ', '') %}
-        <td class="num">
+        <td class="num {{ 'do-cmap' if c.staff_do_cmap and not editar }}">
           {% if editar %}<input form="{{ fid }}" name="{{ campo }}" value="{{ c.staff[campo] }}" inputmode="numeric" pattern="[0-9]*" class="qtd">
           {% else %}{{ c.staff[campo] }}{% endif %}
         </td>
       {% endfor %}
       <td class="num col-total">{{ b.total.staff[campo] }}</td></tr>
     {% endfor %}
+    {% if b.total.staff.outros %}
+    <tr><td class="fixa">Staff - Outros (diretos no CMAP)</td>
+      {% for c in b.colunas %}<td class="num do-cmap">{{ c.staff.outros }}</td>{% endfor %}
+      <td class="num col-total">{{ b.total.staff.outros }}</td></tr>
+    {% endif %}
     <tr><td class="fixa">PA's Staff's - Ocupadas</td>
       {% for c in b.colunas %}<td class="num {{ 'do-forecast' if c.staff_do_forecast }}">{{ c.st_ocup }}</td>{% endfor %}
       <td class="num col-total">{{ b.total.st_ocup }}</td></tr>

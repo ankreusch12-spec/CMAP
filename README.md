@@ -97,6 +97,22 @@ O endereço do forecast vira o Location ID do CMAP pelo nome (ex.: “Curitiba M
 andar “HOME OFFICE” → `BR-WFH-DIRETO`). Avisos da importação mostram frentes sem 6H20/7H12, FATOR PA do
 arquivo diferente da regra e endereços não reconhecidos.
 
+### Staff na tela Gestores
+
+As linhas de staff vêm do que está reservado no CMAP, por Dept Code (só códigos **diretos**, com “DIR”):
+
+| Linha | Códigos do CMAP |
+|---|---|
+| Supervisores / Coordenadores | TEAMLEADER-DIR, FLOORLEADER-DIR, MMSTEAMLEAD-DIR |
+| Plan / WFM | WFM-DIRECT, WFM-DIRBILLREG, WHWFM-DIR, SITWFMNOBIL-DIR |
+| Qualidade | QUALTRAIN-DIR, QUALITY-DIRSITE, PROGTRAIN-DIR, TRANMONITOR-DIR, AGENTAUDITO-DIR, AGENTEVALUA-DIR |
+| Gerentes / Diretores | OPERATSMGMT-DIR, SENOPSMGMT-DIR, OPERATIONS-DIR, DIROPERATI-DIR |
+| Outros (diretos) | qualquer outro código com DIR |
+
+Indiretos (`-INDIR`) e de apoio sem DIR (ADMINFACILITIES, HRGENERALIST…) não entram. Se você digitar o staff em
+“Editar particularidades e staff”, vale o digitado. Em **O que subir**, quando o forecast não traz staff para a
+reserva, o staff do CMAP fica como está.
+
 ## Rotina sugerida
 
 1. O forecast entra sozinho pelo `caminhos.txt` (ou envie em **Importar**). Importe o **relatório do CMAP**

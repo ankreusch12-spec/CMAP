@@ -45,6 +45,7 @@
         {{ i.local.site_id ~ '(' if i.local and i.local.site_id }}{{ i.location_id }}{{ ')' if i.local and i.local.site_id }}
         {{ i.local.descricao if i.local }}<br>
         Frentes: {{ i.lobs|join(' · ') }}
+        {% if not i.usa_staff %}<br>Staff: o forecast não traz staff para esta reserva — o do CMAP fica como está.{% endif %}
       </div>
     </div>
     {% if i.muda %}
@@ -67,7 +68,8 @@
       </tr>
     </thead>
     <tbody>
-      {% for rotulo, atual, novo in [('PRODUCAGENT-DIR', 'ag_atual', 'ag_novo'), ('TEAMLEADER-DIR', 'st_atual', 'st_novo')] %}
+      {% set linhas_cmp = [('PRODUCAGENT-DIR', 'ag_atual', 'ag_novo')] + ([('TEAMLEADER-DIR', 'st_atual', 'st_novo')] if i.usa_staff else []) %}
+      {% for rotulo, atual, novo in linhas_cmp %}
       <tr class="no-cmap">
         <td>{{ rotulo }} <span class="ajuda">no CMAP</span></td>
         {% for l in i.meses %}<td class="num">{{ l[atual] }}</td>{% endfor %}

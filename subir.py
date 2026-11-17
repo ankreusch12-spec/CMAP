@@ -134,12 +134,15 @@ def itens(janela: list[meses.Mes]):
     for (project_id, location_id), b in calculado.items():
         reserva = _reserva_do_controle(project_id, location_id)
         atual = _assentos_atuais(reserva["id"]) if reserva else {}
+        # Sem STAFF no forecast desta reserva, o staff do CMAP fica como está
+        # (não sugerimos zerar o TEAMLEADER-DIR só porque o forecast não traz staff).
+        usa_staff = any(b["staff"].values())
         linhas = []
         for m in janela:
             ag_a = atual.get(forecast.DEPT_AGENTE, {}).get(m.chave, 0)
             st_a = atual.get(forecast.DEPT_STAFF, {}).get(m.chave, 0)
             ag_n = b["agentes"].get(m.chave, 0)
-            st_n = b["staff"].get(m.chave, 0)
+            st_n = b["staff"].get(m.chave, 0) if usa_staff else st_a
             linhas.append({"mes": m, "ag_atual": ag_a, "ag_novo": ag_n,
                            "st_atual": st_a, "st_novo": st_n,
                            "muda": (ag_a, st_a) != (ag_n, st_n)})
@@ -152,6 +155,7 @@ def itens(janela: list[meses.Mes]):
                              b["info"].get("project_name") or project_id),
             "lobs": sorted(b["lobs"]),
             "meses": linhas,
+            "usa_staff": usa_staff,
             "muda": any(l["muda"] for l in linhas),
         })
     lista.sort(key=lambda i: (not i["muda"], banco.cidade(i["location_id"]), i["resv_desc"]))
@@ -194,15 +198,16 @@ def lancar(project_id: str, location_id: str, janela: list[meses.Mes]) -> str | 
 
     chaves = [m.chave for m in janela]
     marcas = ",".join("?" * len(chaves))
-    con.execute(f"""DELETE FROM assentos WHERE reserva_id = ? AND dept_code IN (?, ?)
+    depts = [forecast.DEPT_AGENTE] + ([forecast.DEPT_STAFF] if item["usa_staff"] else [])
+    con.execute(f"""DELETE FROM assentos WHERE reserva_id = ? AND dept_code IN ({",".join("?" * len(depts))})
                     AND mes IN ({marcas})""",
-                (reserva_id, forecast.DEPT_AGENTE, forecast.DEPT_STAFF, *chaves))
+                (reserva_id, *depts, *chaves))
     nomes = {forecast.DEPT_AGENTE: "COGS (SITE) Production Agent Direct",
              forecast.DEPT_STAFF: "COGS (SITE) Team Leader Direct"}
     mudancas = []
     for l in item["meses"]:
         for dept, qtd in ((forecast.DEPT_AGENTE, l["ag_novo"]), (forecast.DEPT_STAFF, l["st_novo"])):
-            if qtd:
+            if qtd and dept in depts:
                 con.execute("""INSERT INTO assentos (reserva_id, dept_code, dept_name, shift, mes, qtd)
                                VALUES (?, ?, ?, 'DED', ?, ?)""",
                             (reserva_id, dept, nomes[dept], l["mes"].chave, qtd))
