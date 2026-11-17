@@ -58,6 +58,7 @@ def salvar_forecast(frentes, avisos, nome_arquivo: str, origem: str = ""):
                      avisos = excluded.avisos, origem = excluded.origem""",
                 (nome_arquivo[:120], datetime.now().strftime("%Y-%m-%d %H:%M"),
                  current_app.config["USUARIO"], "\n".join(avisos), origem))
+    sugerir_mas(con)
     banco.registrar("Forecast importado", f"{nome_arquivo[:120]} — {len(frentes)} frentes", con)
     con.commit()
 
@@ -87,6 +88,30 @@ def sincronizar(forcar: bool = False):
     salvar_forecast(frentes, avisos, arquivo.name, origem=marca)
     return (f"Forecast atualizado sozinho: {arquivo.name} (salvo em "
             f"{modificado.strftime('%d/%m/%Y %H:%M')}), {len(frentes)} frentes.", "ok")
+
+
+def sugerir_mas(con=None) -> int:
+    """
+    Frente do forecast sem MAS: se TODAS as outras frentes da mesma conta usam um único
+    MAS (ex.: Claro Cobrança → WHBRASIL020), ela recebe esse MAS, marcado como "sugerido"
+    para você conferir em Frentes. Assim nenhuma frente do forecast fica de fora à toa.
+    Devolve quantas foram preenchidas.
+    """
+    con = con or banco.db()
+    por_conta = {}
+    for r in con.execute("""SELECT conta, COUNT(DISTINCT project_id) AS n, MAX(project_id) AS mas
+                            FROM frentes WHERE project_id != '' AND conta != '' GROUP BY conta"""):
+        if r["n"] == 1:
+            por_conta[r["conta"]] = r["mas"]
+    preenchidas = 0
+    for r in con.execute("SELECT lob, conta FROM frentes WHERE project_id = '' AND conta != ''").fetchall():
+        if r["conta"] in por_conta:
+            con.execute("UPDATE frentes SET project_id = ?, mas_sugerido = 1 WHERE lob = ?",
+                        (por_conta[r["conta"]], r["lob"]))
+            preenchidas += 1
+    if preenchidas:
+        banco.registrar("MAS sugerido pela conta", f"{preenchidas} frente(s)", con)
+    return preenchidas
 
 
 def frentes_salvas():

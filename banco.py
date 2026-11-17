@@ -188,7 +188,8 @@ CREATE TABLE IF NOT EXISTS frentes (
     project_id    TEXT NOT NULL DEFAULT '', -- MAS, ex.: WHBRASIL006
     project_name  TEXT NOT NULL DEFAULT '',
     cliente       TEXT NOT NULL DEFAULT '',
-    gerencia      TEXT NOT NULL DEFAULT ''  -- gestor (coluna GERENCIA do forecast)
+    gerencia      TEXT NOT NULL DEFAULT '', -- gestor (coluna GERENCIA do forecast)
+    mas_sugerido  INTEGER NOT NULL DEFAULT 0 -- 1 = MAS preenchido sozinho pela conta (conferir)
 );
 
 -- Receptivo (inbound), digitado mês a mês na tela Reserva. Fica na mesma reserva do
@@ -334,6 +335,8 @@ def atualizar_banco_antigo(con):
     # versão 4: gestor nas frentes e turnos no forecast
     if "gerencia" not in colunas("frentes"):
         con.execute("ALTER TABLE frentes ADD COLUMN gerencia TEXT NOT NULL DEFAULT ''")
+    if "mas_sugerido" not in colunas("frentes"):
+        con.execute("ALTER TABLE frentes ADD COLUMN mas_sugerido INTEGER NOT NULL DEFAULT 0")
     if "origem" not in colunas("forecast_info"):
         con.execute("ALTER TABLE forecast_info ADD COLUMN origem TEXT NOT NULL DEFAULT ''")
     for nova in ("ic_manha", "ic_tarde"):

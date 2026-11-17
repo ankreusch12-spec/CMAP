@@ -529,8 +529,8 @@ def registrar_rotas(app: Flask):
             flash(str(erro), "erro")
             return redirect(url_for("frentes"))
         con = banco.db()
-        if not con.execute("UPDATE frentes SET project_id = ?, project_name = ?, cliente = ? "
-                           "WHERE lob = ?", (mas, nome, cliente, lob)).rowcount:
+        if not con.execute("UPDATE frentes SET project_id = ?, project_name = ?, cliente = ?, "
+                           "mas_sugerido = 0 WHERE lob = ?", (mas, nome, cliente, lob)).rowcount:
             abort(404)
         banco.registrar("De-para alterado", f"{lob} → {mas or '(sem MAS)'}")
         con.commit()
@@ -556,6 +556,10 @@ def registrar_rotas(app: Flask):
                    ELSE cliente END WHERE lob = ? AND project_id = ''""",
                 (dp["project_id"], dp["cliente"].upper()[:LIMITE_TEXTO], lob)).rowcount
         banco.registrar("De-para importado", f"{preenchidas} frentes preenchidas")
+        sugeridas = subir.sugerir_mas(con)
+        if sugeridas:
+            flash(f"{sugeridas} frente(s) nova(s) receberam o MAS da própria conta (marcadas como "
+                  "“sugerido”: confira).", "ok")
         con.commit()
         flash(f"{preenchidas} frente(s) receberam o MAS do arquivo.", "ok")
         return redirect(url_for("frentes"))

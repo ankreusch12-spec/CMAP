@@ -71,7 +71,7 @@
     {% for f in frentes %}
     {% set id = 'fr' ~ loop.index %}
     <tr class="{{ 'falta' if not f.project_id }}">
-      <td>{{ f.lob }}{% if f.manual %} <span class="status status-nova">fora do forecast</span>{% endif %}</td>
+      <td>{{ f.lob }}{% if f.manual %} <span class="status status-nova">fora do forecast</span>{% endif %}{% if f.mas_sugerido %} <span class="status status-receptivo" title="MAS preenchido pela conta: confira e clique em Salvar">MAS sugerido</span>{% endif %}</td>
       <td>{{ f.conta }}</td>
       <td class="codigo">{{ f.act_id }}</td>
       <td class="ajuda">{{ f.enderecos or (f.local_manual ~ ' ' ~ (f.andar_manual or '') if f.manual else '') }}</td>

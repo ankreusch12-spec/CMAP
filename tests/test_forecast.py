@@ -503,3 +503,17 @@ def test_forecast_passa_a_acompanhar_o_predio_da_frente(tmp_path):
                                                                        "staff_ho": 0}}}
         subir.salvar_forecast([frente], [], "f.xlsx")
         assert "BR-SAO-EZTOW" in {l["location_id"] for l in banco.locais(somente_ativos=True)}
+
+
+def test_frente_nova_recebe_o_mas_da_propria_conta(app):
+    import subir
+    with app.app_context():
+        con = banco.db()
+        con.executemany("INSERT INTO frentes (lob, conta, project_id) VALUES (?, ?, ?)", [
+            ("AZUL A", "CLIENTE AZUL", "EXEMPLO800"), ("AZUL B", "CLIENTE AZUL", "EXEMPLO800"),
+            ("AZUL NOVA", "CLIENTE AZUL", ""),                        # recebe EXEMPLO800
+            ("VERDE A", "CLIENTE VERDE", "EXEMPLO801"), ("VERDE B", "CLIENTE VERDE", "EXEMPLO802"),
+            ("VERDE NOVA", "CLIENTE VERDE", "")])                     # 2 MAS na conta: não chuta
+        assert subir.sugerir_mas() == 1
+        mas = {r["lob"]: (r["project_id"], r["mas_sugerido"]) for r in con.execute("SELECT * FROM frentes")}
+        assert mas["AZUL NOVA"] == ("EXEMPLO800", 1) and mas["VERDE NOVA"] == ("", 0)
