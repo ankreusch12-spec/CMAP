@@ -6,7 +6,8 @@ diferente, **a política da empresa vale** — ajuste aqui e no código.
 ## 1. Os dados não saem do seu PC
 - O repositório guarda só **código**. O `.gitignore` bloqueia `*.xlsx`, `*.csv`, `*.db`,
   a pasta `instance/` (banco + chave secreta) e arquivos `.env`.
-- O banco é um arquivo SQLite local: `instance/cmap.db`.
+- O banco é um arquivo SQLite local, na pasta do seu usuário no Windows:
+  `%LOCALAPPDATA%\ControleCMAP\cmap.db` (fora do OneDrive, não sincroniza, só o seu usuário acessa).
 - Os dados de exemplo (`dados_exemplo.py`) são **fictícios**.
 - **Nunca** faça commit de planilha, print ou export com dados reais (nomes de clientes,
   capacidades, nomes de pessoas).

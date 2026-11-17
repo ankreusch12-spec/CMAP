@@ -2,14 +2,16 @@
 configurar.py — cria (ou atualiza) o caminhos.txt com duas perguntas simples.
 
 O instalar.bat chama este arquivo. Também dá para rodar sozinho para trocar
-o nome ou o caminho do forecast:   .venv\\Scripts\\python.exe configurar.py
+o nome ou o caminho do forecast: rode o instalar.bat de novo
 """
 from pathlib import Path
 
 import forecast
 
-PASTA = Path(__file__).resolve().parent
-ARQUIVO = PASTA / "caminhos.txt"
+import pastas
+
+# Fica na pasta fixa dos dados (veja pastas.py), não junto do programa.
+ARQUIVO = pastas.pasta_dados() / "caminhos.txt"
 
 
 def perguntar_nome(atual: str) -> str:
@@ -53,6 +55,7 @@ def salvar(nome: str, caminho: str):
 
 
 def main():
+    pastas.trazer_dados_antigos(ARQUIVO.parent)
     atual = forecast.ler_caminhos(ARQUIVO)
     print("=" * 60)
     print(" Controle CMAP - configuração")
@@ -60,7 +63,7 @@ def main():
     nome = perguntar_nome(atual.get("usuario", ""))
     caminho = perguntar_forecast(atual.get("forecast", ""))
     salvar(nome, caminho)
-    print(f"\nPronto! Configuração salva em {ARQUIVO.name}.")
+    print(f"\nPronto! Configuração salva em {ARQUIVO}.")
 
 
 if __name__ == "__main__":

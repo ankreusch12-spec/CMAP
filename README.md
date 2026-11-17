@@ -53,15 +53,20 @@ instalação, marque **“Add python.exe to PATH”**.
   (no Explorador: Shift + botão direito no arquivo ou na pasta → *Copiar como caminho* → cole com Ctrl+V).
   Se não souber o caminho agora, tecle Enter: dá para enviar o forecast pela tela *Importar*.
 
-As respostas ficam no `caminhos.txt` (só no seu PC). Para mudar depois: rode `instalar.bat` de novo
-ou edite o `caminhos.txt` no Bloco de Notas.
+**Onde fica tudo:** a instalação, os dados e as respostas ficam numa pasta fixa do seu usuário,
+`%LOCALAPPDATA%\ControleCMAP` (cole isso na barra do Explorador para abrir). Ela não fica no OneDrive e
+vale para qualquer pasta onde o controle estiver. Para mudar seu nome ou o forecast: rode `instalar.bat`
+de novo ou edite o `caminhos.txt` dessa pasta no Bloco de Notas.
+
+**Atualizar para uma versão nova:** extraia o ZIP novo (em qualquer pasta) e use o `abrir_controle.bat`
+de lá. **Não precisa instalar de novo** e nada se perde. As pastas antigas do controle podem ser apagadas.
 
 **4. Usar** — dê **dois cliques em `abrir_controle.bat`**. O navegador abre em http://127.0.0.1:5000.
 Deixe a janela preta aberta enquanto usa; para desligar, feche a janela.
 
 > Na primeira vez, se quiser conhecer as telas antes dos dados reais: na pasta do controle, abra o
-> Prompt de Comando e rode `.venv\Scripts\python.exe dados_exemplo.py` (dados fictícios).
-> Para começar do zero depois, apague a pasta `instance`.
+> Prompt de Comando e rode `"%LOCALAPPDATA%\ControleCMAP\venv\Scripts\python.exe" dados_exemplo.py` (dados fictícios).
+> Para começar do zero depois, apague o arquivo `cmap.db` da pasta `%LOCALAPPDATA%\ControleCMAP`.
 
 ### Forecast ligado ao arquivo (como nas atas)
 

@@ -266,3 +266,22 @@ def test_importa_da_tabela_dinamica_da_planilha_de_capacidade(cliente, app, tmp_
         pg = next(x for x in banco.reservas() if x["location_id"] == "BR-PON-RUASE")
         qtd = banco.grade_assentos(pg["id"], [meses.Mes(2026, 11), meses.Mes(2026, 12)])[0]["qtd"]
         assert qtd == {"2026-11": 25, "2026-12": 30}
+
+
+def test_dados_ficam_na_pasta_fixa_e_trazem_os_antigos(tmp_path, monkeypatch):
+    import pastas
+    programa = tmp_path / "Controle CMAP"                 # versão antiga: dados ao lado do programa
+    (programa / "instance").mkdir(parents=True)
+    (programa / "instance" / "cmap.db").write_bytes(b"banco antigo")
+    (programa / "caminhos.txt").write_text("usuario = Fulana\n", encoding="utf-8")
+    monkeypatch.setattr(pastas, "PROGRAMA", programa)
+    monkeypatch.setenv("CMAP_DADOS", str(tmp_path / "AppData" / "ControleCMAP"))
+    dados = pastas.pasta_dados()
+    assert dados == tmp_path / "AppData" / "ControleCMAP" and dados.is_dir()
+    pastas.trazer_dados_antigos(dados)
+    assert (dados / "cmap.db").read_bytes() == b"banco antigo"
+    assert "Fulana" in (dados / "caminhos.txt").read_text(encoding="utf-8")
+    # não sobrescreve o que já está na pasta fixa
+    (programa / "caminhos.txt").write_text("usuario = Outra\n", encoding="utf-8")
+    pastas.trazer_dados_antigos(dados)
+    assert "Fulana" in (dados / "caminhos.txt").read_text(encoding="utf-8")

@@ -30,6 +30,7 @@ import banco
 import forecast
 import gestores
 import meses
+import pastas
 import planilhas
 import seguranca
 import subir
@@ -42,9 +43,12 @@ LIMITE_TEXTO = 120
 
 
 def criar_app(config: dict | None = None) -> Flask:
-    caminhos = forecast.ler_caminhos(PASTA / "caminhos.txt")
-    app = Flask(__name__, instance_relative_config=True)
-    os.makedirs(app.instance_path, exist_ok=True)
+    # Dados e configuração ficam numa pasta fixa do usuário (veja pastas.py),
+    # para qualquer cópia do programa usar os mesmos dados.
+    dados = pastas.pasta_dados()
+    pastas.trazer_dados_antigos(dados)
+    caminhos = forecast.ler_caminhos(dados / "caminhos.txt")
+    app = Flask(__name__, instance_path=str(dados))
     app.config.update(
         BANCO=os.path.join(app.instance_path, "cmap.db"),
         SECRET_KEY=seguranca.chave_secreta(app.instance_path),
