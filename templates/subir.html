@@ -44,20 +44,40 @@
   <span class="contador" data-contador-cartoes></span>
 </form>
 
+<details class="cartao incluir">
+  <summary class="botao claro">+ Receptivo numa reserva</summary>
+  <p class="ajuda">Para reservas que têm receptivo (inbound): só receptivo (ex.: P_CLARO RCV_CWB) ou
+    compartilhadas com o outbound no mesmo projeto (ex.: Via Varejo, Carrefour/Atacadão, Sam's/Walmart).
+    Abre no cartão da reserva uma linha para digitar o receptivo mês a mês.</p>
+  <form method="post" action="{{ url_for('novo_receptivo') }}" class="formulario linha">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Reserva do CMAP
+      <select name="reserva_id" required>
+        <option value="">— escolha —</option>
+        {% for r in reservas_cmap %}<option value="{{ r.id }}">{{ r.resv_desc }} · {{ r.project_id }} · {{ r.project_name }} · {{ r.site_nome }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="botao">Abrir receptivo</button>
+  </form>
+</details>
+
 {% for i in itens %}
-<section class="cartao {{ 'sem-mudanca' if not i.muda }}" data-cartao
+{% set fid = 'rec-' ~ loop.index %}
+<section class="cartao {{ 'sem-mudanca' if not i.muda }}" data-cartao id="{{ i.project_id ~ i.location_id }}"
          data-carteira="{{ i.carteira }}"
          data-busca="{{ [i.carteira, i.resv_desc, i.project_id, i.project_name, i.location_id, i.lobs|join(' ')]|join(' ')|lower }}">
   <div class="cartao-topo">
     <div>
       <span class="etiqueta-carteira">{{ i.carteira }}</span> <b>{{ i.resv_desc }}</b>
       {% if not i.reserva %}<span class="status status-nova">nova no CMAP</span>{% endif %}
+      {% if i.tipo == 'receptivo' %}<span class="status status-receptivo">receptivo</span>
+      {% elif i.tipo == 'compartilhada' %}<span class="status status-receptivo">outbound + receptivo</span>{% endif %}
       {% if not i.muda %}<span class="status status-confirmado">em dia</span>{% endif %}
       <div class="ajuda">
         {{ i.project_id }}-{{ i.project_name }} ·
         {{ i.local.site_id ~ '(' if i.local and i.local.site_id }}{{ i.location_id }}{{ ')' if i.local and i.local.site_id }}
         {{ i.local.descricao if i.local }}<br>
-        Frentes: {{ i.lobs|join(' · ') }}
+        {% if i.lobs %}Frentes: {{ i.lobs|join(' · ') }}{% else %}Sem forecast (só receptivo).{% endif %}
         {% if not i.usa_staff %}<br>Staff: o forecast não traz staff para esta reserva — o do CMAP fica como está.{% endif %}
       </div>
     </div>
@@ -94,12 +114,39 @@
         <td>No CMAP <span class="ajuda">(controle, com os lançamentos)</span></td>
         {% for l in i.meses %}<td class="num">{{ l[atual] }}</td>{% endfor %}
       </tr>
+      {% if novo == 'ag_novo' and i.tem_receptivo %}
+      <tr>
+        <td>Forecast outbound</td>
+        {% for l in i.meses %}<td class="num">{{ l.ag_out }}</td>{% endfor %}
+      </tr>
+      <tr class="linha-receptivo">
+        <td>Receptivo <span class="ajuda">(manual)</span>
+          <form id="{{ fid }}" method="post" action="{{ url_for('salvar_receptivo') }}" class="acoes-receptivo">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="project_id" value="{{ i.project_id }}">
+            <input type="hidden" name="location_id" value="{{ i.location_id }}">
+            <button class="botao pequeno">Salvar receptivo</button>
+            <button class="botao pequeno claro" formaction="{{ url_for('remover_receptivo') }}"
+                    data-confirmar-botao="Remover o receptivo desta reserva?">Remover</button>
+          </form>
+        </td>
+        {% for l in i.meses %}
+          <td class="num"><input form="{{ fid }}" name="rec_{{ l.mes.chave }}" value="{{ l.ag_rec }}"
+              inputmode="numeric" pattern="[0-9]*" class="qtd" aria-label="Receptivo {{ l.mes.rotulo }}"></td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td><b>Total necessário</b> <span class="ajuda">(outbound + receptivo)</span></td>
+        {% for l in i.meses %}<td class="num"><b>{{ l.ag_novo }}</b></td>{% endfor %}
+      </tr>
+      {% else %}
       <tr>
         <td><b>Forecast</b></td>
         {% for l in i.meses %}<td class="num"><b>{{ l[novo] }}</b></td>{% endfor %}
       </tr>
+      {% endif %}
       <tr class="linha-dif">
-        <td>Diferença Forecast − CMAP <span class="ajuda">(o que subir)</span></td>
+        <td>Diferença {{ 'Necessário' if novo == 'ag_novo' and i.tem_receptivo else 'Forecast' }} − CMAP <span class="ajuda">(o que subir)</span></td>
         {% for l in i.meses %}
           {% set d = l[novo] - l[atual] %}
           <td class="num {{ 'sobe' if d > 0 else 'desce' if d < 0 }}">{% if d %}{{ '▲' if d > 0 else '▼' }}{{ d|abs }}{% else %}·{% endif %}</td>

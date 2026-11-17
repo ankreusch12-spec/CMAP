@@ -404,3 +404,58 @@ def test_gestores_separado_por_cidade(cliente, app):
                                                                  ("Ponta Grossa", "GESTOR UM")]
     html = cliente.get(f"/gestores?mes={MES.chave}&cidade=Curitiba").get_data(as_text=True)
     assert "OPERAÇÕES GESTOR UM" in html and "Ponta Grossa ·" not in html
+
+
+def test_receptivo_manual_mes_a_mes(cliente, app):
+    import gestores
+    import subir
+    t = cliente.token
+    janela = meses.janela()
+    with app.app_context():
+        con = banco.db()
+        con.execute("INSERT INTO locais (location_id, descricao, capacidade) VALUES ('BR-CUR-MALDE-02', 'M3', 500)")
+        ids = {}
+        # CMAP: projeto compartilhado (outbound + receptivo) e projeto só de receptivo (RCV)
+        for proj, cliente_cmap, nome, qtd in (("EXEMPLO600", "CLIENTEAZUL", "P_CLIENTE AZUL COBRANCA_CWB", 206),
+                                              ("EXEMPLO601", "CLIENTEAZUL", "P_CLIENTE AZUL RCV_CWB", 40)):
+            ids[proj] = con.execute("""INSERT INTO reservas (resv_desc, project_id, project_name, cliente,
+                                       location_id, status, criado_em, criado_por) VALUES
+                                       (?, ?, ?, ?, 'BR-CUR-MALDE-02', 'Confirmado', '2026-01-01', 'x')""",
+                                    (proj, proj, nome, cliente_cmap)).lastrowid
+            for m in janela:
+                con.execute("INSERT INTO assentos VALUES (?, 'PRODUCAGENT-DIR', '', 'DED', ?, ?)",
+                            (ids[proj], m.chave, qtd))
+        con.commit()
+    # outbound: 116 pelo "forecast" (carteira manual)
+    cliente.post("/frentes/manual", data={"csrf_token": t, "lob": "AZUL ATIVO", "conta": "CLIENTE AZUL",
+                                          "gerencia": "GESTOR UM", "project_id": "EXEMPLO600",
+                                          "location_id": "BR-CUR-MALDE-02", "carga": "7H12", "mop": "116"})
+    # receptivo do compartilhado: 90 em todos os meses, 95 no último
+    dados = {"csrf_token": t, "project_id": "EXEMPLO600", "location_id": "BR-CUR-MALDE-02",
+             **{f"rec_{m.chave}": "90" for m in janela}, f"rec_{janela[-1].chave}": "95"}
+    cliente.post("/subir/receptivo", data=dados)
+    # projeto só de receptivo: abre pelo "+ Receptivo"
+    cliente.post("/subir/receptivo/novo", data={"csrf_token": t, "reserva_id": ids["EXEMPLO601"]})
+    with app.app_context():
+        itens = {i["project_id"]: i for i in subir.itens(janela)}
+        comp = itens["EXEMPLO600"]
+        assert comp["tipo"] == "compartilhada"
+        assert (comp["meses"][0]["ag_out"], comp["meses"][0]["ag_rec"], comp["meses"][0]["ag_novo"]) == (116, 90, 206)
+        assert not comp["meses"][0]["muda"] and comp["meses"][-1]["ag_novo"] == 211   # só o último muda
+        rcv = itens["EXEMPLO601"]
+        assert rcv["tipo"] == "receptivo" and rcv["meses"][0]["ag_novo"] == 0
+
+        grupos, _ = banco.ocupacao(janela)
+        linhas = {c["nome"]: c["res"][0] for c in grupos[0]["locais"][0]["carteiras"]}
+        assert linhas == {"CLIENTE AZUL · outbound": 116, "CLIENTE AZUL · receptivo": 130}   # 90 + 40 (RCV)
+
+        col = next(c for b in gestores.visao(MES) for c in b["colunas"] if c["project_id"] == "EXEMPLO600")
+        assert (col["ag_ocup"], col["ag_disp"], col["receptivo"]) == (116, 116, 90)          # 100% outbound
+
+    # número inválido é recusado; remover apaga
+    r = cliente.post("/subir/receptivo", data={**dados, f"rec_{janela[0].chave}": "-1"}, follow_redirects=True)
+    assert "número inteiro" in r.get_data(as_text=True)
+    cliente.post("/subir/receptivo/remover", data={"csrf_token": t, "project_id": "EXEMPLO601",
+                                                   "location_id": "BR-CUR-MALDE-02"})
+    with app.app_context():
+        assert "EXEMPLO601" not in {i["project_id"] for i in subir.itens(janela)}

@@ -295,7 +295,8 @@ def test_carteira_de_casa_nomes_do_cmap_com_as_contas_do_forecast():
     assert banco.carteira_de("CLIENTE VERDE", "P_CD - CLIENTE VERDE EMPRESAS", contas) == \
         "CLIENTE VERDE EMPRESAS"                                                      # desempata pelo projeto
     assert banco.carteira_de("CLIENTE VERDE", "P_CLIENTE VERDE RCV", contas) == \
-        "CLIENTE VERDE COBRANÇA"                                                      # sem pista: alfabética
+        "CLIENTE VERDE"                                                               # sem pista: parte comum
+    assert banco.eh_receptivo("P_CLIENTE VERDE RCV_CWB") and not banco.eh_receptivo("P_X COBRANCA")
     assert banco.carteira_de("OUTRO", "LOJA X - Client Co", contas) == "LOJA X"       # pelo projeto
     assert banco.carteira_de("OUTRO", "P_OUTRO", contas) is None                      # não é minha
     assert banco.carteira_de("", "Hold reservation", contas) is None                  # sem cliente

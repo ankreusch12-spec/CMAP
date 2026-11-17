@@ -328,7 +328,42 @@ def registrar_rotas(app: Flask):
                                sem_mas=subir.pendencias_de_para(), info=subir.info_forecast(),
                                carteiras=sorted({i["carteira"] for i in lista if i["carteira"]}),
                                tem_arquivo=subir.tem_arquivo(),
+                               reservas_cmap=banco.reservas(),
                                lancamentos=subir.lancamentos())
+
+    @app.post("/subir/receptivo")
+    def salvar_receptivo():
+        """Receptivo (inbound) digitado mês a mês no cartão da reserva."""
+        try:
+            project_id = codigo("project_id")
+            location_id = texto("location_id")
+            valores = {m.chave: inteiro(f"rec_{m.chave}") for m in meses.janela()}
+        except ValueError as erro:
+            flash(str(erro), "erro")
+            return redirect(url_for("o_que_subir"))
+        subir.salvar_receptivo(project_id, location_id, valores)
+        flash(f"Receptivo salvo para {project_id} / {location_id}.", "ok")
+        return redirect(url_for("o_que_subir", tudo=1) + "#" + project_id + location_id)
+
+    @app.post("/subir/receptivo/novo")
+    def novo_receptivo():
+        """+ Receptivo: escolhe uma reserva do CMAP e abre a linha de receptivo nela."""
+        r = banco.reserva(int(request.form.get("reserva_id") or 0)) or abort(404)
+        subir.salvar_receptivo(r["project_id"], r["location_id"], {m.chave: 0 for m in meses.janela()})
+        flash(f"Receptivo aberto em {r['resv_desc']}: preencha os meses e salve.", "ok")
+        return redirect(url_for("o_que_subir", tudo=1) + "#" + r["project_id"] + r["location_id"])
+
+    @app.post("/subir/receptivo/remover")
+    def remover_receptivo():
+        try:
+            project_id = codigo("project_id")
+            location_id = texto("location_id")
+        except ValueError as erro:
+            flash(str(erro), "erro")
+            return redirect(url_for("o_que_subir"))
+        subir.remover_receptivo(project_id, location_id)
+        flash("Receptivo removido desta reserva.", "ok")
+        return redirect(url_for("o_que_subir", tudo=1))
 
     @app.post("/subir/lancar")
     def lancar():

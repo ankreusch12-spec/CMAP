@@ -150,33 +150,46 @@ def _assentos_atuais(reserva_id) -> dict:
 
 def itens(janela: list[meses.Mes]):
     """
-    Lista de comparações, uma por MAS + local. Cada item tem:
-      chave, resv_desc, reserva (ou None), local, lobs,
-      meses: [{mes, ag_atual, ag_novo, st_atual, st_novo, muda}], muda (bool)
+    Lista de comparações, uma por reserva (MAS + local). Entram as reservas com forecast
+    (outbound) e as que têm receptivo digitado. Cada item tem:
+      resv_desc, reserva (ou None), local, lobs, carteira, tipo,
+      meses: [{mes, ag_arq, ag_atual, ag_out, ag_rec, ag_novo, st_..., muda}], muda (bool)
+    ag_novo = forecast outbound + receptivo (manual) = o que precisa estar no CMAP.
     """
     calculado = forecast.calcular(frentes_salvas(), de_para(), janela, _acompanho())
+    receptivo = _receptivo()
     locais = {l["location_id"]: l for l in banco.locais()}
     arquivo = _do_arquivo()
     lista = []
-    for (project_id, location_id), b in calculado.items():
+    for project_id, location_id in set(calculado) | set(receptivo):
+        b = calculado.get((project_id, location_id))
+        rec = receptivo.get((project_id, location_id))
         reserva = _reserva_do_controle(project_id, location_id)
+        if not b and not reserva:
+            continue                                  # receptivo de reserva que não existe mais
         atual = _assentos_atuais(reserva["id"]) if reserva else {}
         # Sem STAFF no forecast desta reserva, o staff do CMAP fica como está
         # (não sugerimos zerar o TEAMLEADER-DIR só porque o forecast não traz staff).
-        usa_staff = any(b["staff"].values())
+        usa_staff = bool(b) and any(b["staff"].values())
         linhas = []
         for m in janela:
             ag_a = atual.get(forecast.DEPT_AGENTE, {}).get(m.chave, 0)
             st_a = atual.get(forecast.DEPT_STAFF, {}).get(m.chave, 0)
-            ag_n = b["agentes"].get(m.chave, 0)
+            ag_out = b["agentes"].get(m.chave, 0) if b else 0
+            ag_rec = rec.get(m.chave, 0) if rec else 0
+            ag_n = ag_out + ag_rec
             st_n = b["staff"].get(m.chave, 0) if usa_staff else st_a
             arq = arquivo.get((project_id, location_id, m.chave), {})
-            linhas.append({"mes": m, "ag_atual": ag_a, "ag_novo": ag_n,
-                           "st_atual": st_a, "st_novo": st_n,
+            linhas.append({"mes": m, "ag_atual": ag_a, "ag_out": ag_out, "ag_rec": ag_rec,
+                           "ag_novo": ag_n, "st_atual": st_a, "st_novo": st_n,
                            # como veio no último arquivo do CMAP importado
                            "ag_arq": arq.get(forecast.DEPT_AGENTE, 0),
                            "st_arq": arq.get(forecast.DEPT_STAFF, 0),
                            "muda": (ag_a, st_a) != (ag_n, st_n)})
+        if b:
+            carteira = b["info"].get("conta") or b["info"].get("cliente") or ""
+        else:
+            carteira = banco.carteira_de(reserva["cliente"], reserva["project_name"]) or reserva["cliente"]
         lista.append({
             "project_id": project_id, "location_id": location_id,
             "local": locais.get(location_id),
@@ -184,14 +197,43 @@ def itens(janela: list[meses.Mes]):
             "resv_desc": reserva["resv_desc"] if reserva else forecast.resv_desc(b["info"], location_id),
             "project_name": (reserva["project_name"] if reserva else
                              b["info"].get("project_name") or project_id),
-            "lobs": sorted(b["lobs"]),
-            "carteira": b["info"].get("conta") or b["info"].get("cliente") or "",
+            "lobs": sorted(b["lobs"]) if b else [],
+            "carteira": carteira,
+            # outbound (só forecast), receptivo (só manual) ou os dois na mesma reserva
+            "tipo": "compartilhada" if b and rec else "receptivo" if rec else "outbound",
+            "tem_receptivo": rec is not None,
             "meses": linhas,
             "usa_staff": usa_staff,
             "muda": any(l["muda"] for l in linhas),
         })
     lista.sort(key=lambda i: (not i["muda"], banco.cidade(i["location_id"]), i["resv_desc"]))
     return lista
+
+
+def _receptivo():
+    """{(MAS, local): {mês: PAs}} do receptivo digitado na tela Reserva."""
+    dados = defaultdict(dict)
+    for r in banco.db().execute("SELECT * FROM receptivo"):
+        dados[(r["project_id"], r["location_id"])][r["mes"]] = r["qtd"]
+    return dados
+
+
+def salvar_receptivo(project_id: str, location_id: str, valores: dict):
+    """Grava o receptivo mês a mês ({'2026-11': 90, ...}) de uma reserva."""
+    con = banco.db()
+    con.executemany("""INSERT INTO receptivo (project_id, location_id, mes, qtd) VALUES (?, ?, ?, ?)
+                       ON CONFLICT (project_id, location_id, mes) DO UPDATE SET qtd = excluded.qtd""",
+                    [(project_id, location_id, mes, qtd) for mes, qtd in valores.items()])
+    banco.registrar("Receptivo salvo", f"{project_id} / {location_id}: "
+                    + ", ".join(f"{meses.de_chave(m).rotulo} {q}" for m, q in sorted(valores.items())), con)
+    con.commit()
+
+
+def remover_receptivo(project_id: str, location_id: str):
+    con = banco.db()
+    con.execute("DELETE FROM receptivo WHERE project_id = ? AND location_id = ?", (project_id, location_id))
+    banco.registrar("Receptivo removido", f"{project_id} / {location_id}", con)
+    con.commit()
 
 
 def _do_arquivo():

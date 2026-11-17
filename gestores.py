@@ -110,6 +110,7 @@ def visao(mes: meses.Mes):
     de_para = subir.de_para()
     ativos = {l["location_id"] for l in banco.locais(somente_ativos=True)}
     detalhes = _detalhes()
+    receptivo = subir._receptivo()            # receptivo digitado na tela Reserva
 
     por_gerente = defaultdict(list)
     for f in frentes:
@@ -154,6 +155,9 @@ def visao(mes: meses.Mes):
                 continue
             project_id, location_id = chave
             res_ag, staff_cmap = _reservado(project_id, location_id, mes)
+            # Projeto compartilhado com o receptivo: a parte dele não é do outbound
+            rec = min(receptivo.get(chave, {}).get(mes.chave, 0), res_ag)
+            res_ag -= rec
             res_st = sum(staff_cmap.values())                 # todo staff direto reservado
             d = detalhes.get(chave)
             digitado = {k: (d[k] if d else 0) for k, _ in CATEGORIAS_STAFF}
@@ -179,6 +183,7 @@ def visao(mes: meses.Mes):
                 "hc": round(b["hc"]), "manha": round(b["manha"]), "tarde": round(b["tarde"]),
                 "home": round(b["home"]),
                 "ag_ocup": ag_ocup, "ag_disp": res_ag, "ag_pct": _pct(ag_ocup, res_ag),
+                "receptivo": rec,
                 "staff": staff_linhas, "staff_do_cmap": staff_do_cmap,
                 "staff_digitado": digitado, "staff_do_forecast": staff_do_forecast,
                 "st_ocup": staff_ocup, "st_disp": res_st, "st_pct": _pct(staff_ocup, res_st),
@@ -213,7 +218,7 @@ def _quadro(colunas):
         else:
             c["titulo"] = c["conta"]
     total = {k: sum(c[k] for c in colunas) for k in
-             ("hc", "manha", "tarde", "home", "ag_ocup", "ag_disp", "st_ocup", "st_disp",
+             ("hc", "manha", "tarde", "home", "ag_ocup", "ag_disp", "receptivo", "st_ocup", "st_disp",
               "tot_ocup", "tot_disp")}
     total["staff"] = {k: sum(c["staff"][k] for c in colunas)
                       for k in [k for k, _ in CATEGORIAS_STAFF] + ["outros"]}

@@ -83,6 +83,11 @@ function abas() {
 
 // 3) Pergunta "tem certeza?" antes de excluir.
 function confirmacoes() {
+  document.querySelectorAll("button[data-confirmar-botao]").forEach((botao) => {
+    botao.addEventListener("click", (e) => {
+      if (!confirm(botao.dataset.confirmarBotao)) e.preventDefault();
+    });
+  });
   document.querySelectorAll("form[data-confirmar]").forEach((form) => {
     form.addEventListener("submit", (e) => {
       if (!confirm(form.dataset.confirmar)) e.preventDefault();

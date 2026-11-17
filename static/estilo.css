@@ -253,3 +253,7 @@ details.incluir:not([open]) { border: 0; padding: 0; }
 .etiqueta-carteira { background: var(--cnx-azul); color: #fff; border-radius: 3px; padding: 1px 6px; font-size: 11px; font-weight: 700; }
 .filtro-cartoes { margin: 10px 0; }
 [hidden] { display: none !important; }
+.status-receptivo { background: var(--atencao); color: var(--atencao-texto); }
+.comparacao tr.linha-receptivo td { background: var(--atencao); }
+.comparacao tr.linha-receptivo input.qtd { width: 56px; }
+.acoes-receptivo { display: flex; gap: 4px; margin-top: 4px; }

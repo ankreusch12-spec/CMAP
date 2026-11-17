@@ -97,7 +97,7 @@
   </thead>
 
   <tbody>
-    {% for rotulo, campo in [("HC's TOTAL", 'hc'), ("HCs - Manhã (6h20)", 'manha'), ("HCs - Tarde (6h20)", 'tarde'), ("HCs - Home Office", 'home'), ("PA's Operação - Ocupadas", 'ag_ocup'), ("PA's Operação - Disponíveis (Reservadas)", 'ag_disp')] %}
+    {% for rotulo, campo in [("HC's TOTAL", 'hc'), ("HCs - Manhã (6h20)", 'manha'), ("HCs - Tarde (6h20)", 'tarde'), ("HCs - Home Office", 'home'), ("PA's Operação - Ocupadas", 'ag_ocup'), ("PA's Operação - Disponíveis (Reservadas)", 'ag_disp')] + ([("PA's do Receptivo no mesmo projeto (manual, fora da conta)", 'receptivo')] if b.total.receptivo else []) %}
     <tr><td class="fixa">{{ rotulo }}</td>
       {% for c in b.colunas %}<td class="num">{{ c[campo] }}</td>{% endfor %}
       <td class="num col-total">{{ b.total[campo] }}</td></tr>

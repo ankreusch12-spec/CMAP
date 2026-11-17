@@ -10,6 +10,7 @@ Tabelas (mesmos nomes de campos do CMAP):
   assentos  -> aba "Assentos" de cada reserva (Dept Code x mês)
   historico -> quem mudou o quê e quando (bom para auditoria)
 """
+import os
 import re
 import sqlite3
 import unicodedata
@@ -109,8 +110,18 @@ def carteira_de(cliente, projeto="", carteiras=None) -> str | None:
     if len(candidatas) > 1:
         # desempate: a carteira cujo nome inteiro aparece no projeto
         no_projeto = [n for n in candidatas if _limpo(n) in proj]
-        candidatas = no_projeto or sorted(candidatas)
+        if no_projeto:
+            return no_projeto[0]
+        # sem pista (ex.: P_CLARO RCV_CWB): fica a parte comum dos nomes ("CLARO")
+        comum = os.path.commonprefix([n.split() for n in sorted(candidatas)])
+        return " ".join(comum) if comum else sorted(candidatas)[0]
     return candidatas[0] if candidatas else None
+
+
+def eh_receptivo(projeto) -> bool:
+    """Projeto só de receptivo (inbound), pelo nome: P_CLARO RCV_CWB, ...RECEPTIVO..."""
+    nome = _limpo(projeto)
+    return "RCV" in nome or "RECEPT" in nome
 
 
 # Alguns relatórios do CMAP usam outro código para o mesmo local.
@@ -178,6 +189,16 @@ CREATE TABLE IF NOT EXISTS frentes (
     project_name  TEXT NOT NULL DEFAULT '',
     cliente       TEXT NOT NULL DEFAULT '',
     gerencia      TEXT NOT NULL DEFAULT ''  -- gestor (coluna GERENCIA do forecast)
+);
+
+-- Receptivo (inbound), digitado mês a mês na tela Reserva. Fica na mesma reserva do
+-- CMAP que o outbound quando o projeto é compartilhado (ex.: Via Varejo, Carrefour).
+CREATE TABLE IF NOT EXISTS receptivo (
+    project_id   TEXT NOT NULL,
+    location_id  TEXT NOT NULL,
+    mes          TEXT NOT NULL,
+    qtd          INTEGER NOT NULL CHECK (qtd >= 0),   -- PAs do receptivo (agentes)
+    PRIMARY KEY (project_id, location_id, mes)
 );
 
 -- O que veio no último arquivo do CMAP importado (para comparar com o controle).
@@ -403,18 +424,30 @@ def ocupacao(janela: list[meses.Mes]):
     """
     marcas = ",".join("?" * len(STATUS_QUE_OCUPAM))
     somas = db().execute(f"""
-        SELECT r.location_id, r.cliente, r.project_name, a.mes, SUM(a.qtd) AS total
+        SELECT r.location_id, r.project_id, r.cliente, r.project_name, a.mes, SUM(a.qtd) AS total
         FROM assentos a JOIN reservas r ON r.id = a.reserva_id
         WHERE r.status IN ({marcas})
-        GROUP BY r.location_id, r.cliente, r.project_name, a.mes""", STATUS_QUE_OCUPAM).fetchall()
+        GROUP BY r.location_id, r.project_id, r.cliente, r.project_name, a.mes""",
+        STATUS_QUE_OCUPAM).fetchall()
+    receptivo = {(r["project_id"], r["location_id"], r["mes"]): r["qtd"]
+                 for r in db().execute("SELECT * FROM receptivo")}
+    com_receptivo = {(p, l) for p, l, _m in receptivo}                    # reservas compartilhadas
     minhas = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))   # local -> carteira -> mês
     outras = defaultdict(lambda: defaultdict(int))                        # local -> mês
     for s in somas:
         cart = carteira_de(s["cliente"], s["project_name"])     # sem cliente vai p/ "outras"
-        if cart:
-            minhas[s["location_id"]][cart][s["mes"]] += s["total"]
+        loc, mes, total = s["location_id"], s["mes"], s["total"]
+        if not cart:
+            outras[loc][mes] += total
+        elif eh_receptivo(s["project_name"]):                  # projeto só de receptivo
+            minhas[loc][f"{cart} · receptivo"][mes] += total
         else:
-            outras[s["location_id"]][s["mes"]] += s["total"]
+            # projeto compartilhado: a parte do receptivo é o que você digitou na Reserva
+            rec = min(receptivo.get((s["project_id"], loc, mes), 0), total)
+            if rec:
+                minhas[loc][f"{cart} · receptivo"][mes] += rec
+            compartilhado = (s["project_id"], loc) in com_receptivo
+            minhas[loc][f"{cart} · outbound" if compartilhado else cart][mes] += total - rec
 
     grupos: dict[str, dict] = {}
     geral = _vazio(janela)
