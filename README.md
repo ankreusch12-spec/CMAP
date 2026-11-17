@@ -125,7 +125,7 @@ instalar.bat      instalação (dois cliques, uma vez)
 abrir_controle.bat  abre o controle no navegador
 templates/        HTML de cada tela
 static/           estilo (CSS) e JavaScript
-tests/            testes automáticos  ->  python -m pytest
+tests/            testes automáticos  ->  pip install -r requirements-dev.txt; python -m pytest
 ```
 
 ## Identidade visual

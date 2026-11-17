@@ -7,4 +7,4 @@
 - Segurança: seguir `SEGURANCA.md` e a skill `seguranca-cmap` antes de qualquer mudança.
   Nunca colocar dados reais da empresa no repositório; exemplos e testes são fictícios.
 - Stack: Python + Flask + SQLite + openpyxl, sem dependências de front-end externas.
-- Rodar: `python app.py` (http://127.0.0.1:5000). Testes: `python -m pytest`.
+- Rodar: `python app.py` (http://127.0.0.1:5000). Testes: `pip install -r requirements-dev.txt` e `python -m pytest`.

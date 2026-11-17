@@ -31,8 +31,14 @@ echo.
 
 rem --- 3) Instala as bibliotecas (Flask e openpyxl) -------------------
 echo [3/4] Instalando as bibliotecas (pode levar 1 ou 2 minutos)...
+rem    Primeiro tenta pelos pacotes que ja vem na pasta "pacotes" (sem internet).
+rem    Se nao der (ex.: Python diferente), baixa da internet.
+".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q --no-index --find-links pacotes -r requirements.txt
+if not errorlevel 1 goto pip_ok
+echo       Pacotes da pasta nao serviram; baixando da internet...
 ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r requirements.txt
 if errorlevel 1 goto erro_pip
+:pip_ok
 echo [3/4] Bibliotecas OK.
 echo.
 

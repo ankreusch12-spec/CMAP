@@ -1,0 +1,20 @@
+CONTROLE CMAP - COMO COMEÇAR
+============================
+
+Precisa ter o Python 3.11 ou mais novo instalado no PC
+(se não tiver: TI / Portal da Empresa; marque "Add python.exe to PATH").
+
+1) Deixe esta pasta num lugar fixo (ex.: Documentos\Controle CMAP).
+   Se veio em ZIP: botão direito > Extrair tudo... (não rode de dentro do ZIP).
+
+2) Dois cliques em  instalar.bat   (só na primeira vez)
+   - instala tudo sozinho (funciona mesmo sem internet: os pacotes estão na pasta "pacotes")
+   - pergunta seu nome e o caminho do FORECAST OFICIAL
+     (no Explorador: Shift + botão direito no arquivo > Copiar como caminho > cole com Ctrl+V)
+
+3) Dois cliques em  abrir_controle.bat   (sempre que for usar)
+   - o navegador abre em http://127.0.0.1:5000
+   - deixe a janela preta aberta enquanto usa; para desligar, feche a janela
+
+Mais detalhes: README.md (abre no Bloco de Notas ou no navegador).
+Os dados ficam só neste PC (pasta "instance"). Não compartilhe essa pasta.

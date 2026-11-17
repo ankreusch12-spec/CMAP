@@ -23,3 +23,6 @@ secret_key
 
 # Caminhos do seu PC (pessoal)
 caminhos.txt
+
+# Pacotes para instalar sem internet (vão só no ZIP, não no Git)
+pacotes/

@@ -1,0 +1,3 @@
+# Só para quem mexe no código: testes automáticos (python -m pytest)
+-r requirements.txt
+pytest==9.2.0
