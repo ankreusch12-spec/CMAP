@@ -459,3 +459,47 @@ def test_receptivo_manual_mes_a_mes(cliente, app):
                                                    "location_id": "BR-CUR-MALDE-02"})
     with app.app_context():
         assert "EXEMPLO601" not in {i["project_id"] for i in subir.itens(janela)}
+
+
+def test_dividir_reservado_e_cidade_do_home_office():
+    import gestores
+    assert gestores._dividir(100, [30, 10]) == [75, 25]
+    assert gestores._dividir(5, [1, 1, 1]) == [2, 2, 1] and sum(gestores._dividir(7, [0, 0])) == 7
+    # home office entra na cidade do endereço (ex.: TIM - PG)
+    pg_home = {"endereco": "Ponta Grossa Brazil-Rua Sete de Setembro", "location_id": "BR-WFH-DIRETO"}
+    assert gestores._cidade_do_endereco(pg_home) == "Ponta Grossa"
+    assert gestores._cidade_do_endereco({"endereco": "", "location_id": "BR-WFH-DIRETO"}) == "Home Office"
+
+
+def test_mesmo_mas_e_predio_de_dois_gestores_divide_o_reservado(cliente, app):
+    import gestores
+    t = cliente.token
+    with app.app_context():
+        con = banco.db()
+        con.execute("INSERT INTO locais (location_id, descricao) VALUES ('BR-CUR-MALDE-02', 'M3')")
+        rid = con.execute("""INSERT INTO reservas (resv_desc, project_id, project_name, cliente, location_id,
+                             status, criado_em, criado_por) VALUES ('AZUL_M3', 'EXEMPLO700', 'P', 'CLIENTE AZUL',
+                             'BR-CUR-MALDE-02', 'Confirmado', '2026-01-01', 'x')""").lastrowid
+        con.execute("INSERT INTO assentos VALUES (?, 'PRODUCAGENT-DIR', '', 'DED', ?, 100)", (rid, MES.chave))
+        con.commit()
+    for lob, gestor, mop in (("AZUL A", "GESTOR UM", "30"), ("AZUL B", "GESTOR DOIS", "10")):
+        cliente.post("/frentes/manual", data={"csrf_token": t, "lob": lob, "conta": "CLIENTE AZUL",
+                                              "gerencia": gestor, "project_id": "EXEMPLO700",
+                                              "location_id": "BR-CUR-MALDE-02", "carga": "7H12", "mop": mop})
+    with app.app_context():
+        cols = {b["gerente"]: b["colunas"][0] for b in gestores.visao(MES)}
+        assert (cols["GESTOR UM"]["ag_disp"], cols["GESTOR DOIS"]["ag_disp"]) == (75, 25)   # 100 dividido 3:1
+        assert cols["GESTOR UM"]["dividido"]
+
+
+def test_forecast_passa_a_acompanhar_o_predio_da_frente(tmp_path):
+    app = criar_app({"TESTING": True, "BANCO": str(tmp_path / "t.db")})   # com os locais do CMAP
+    with app.app_context():
+        assert "BR-SAO-EZTOW" not in {l["location_id"] for l in banco.locais(somente_ativos=True)}
+        import subir
+        frente = {"lob": "FRENTE EZ", "act_id": "", "conta": "CLIENTE AZUL", "gerencia": "G",
+                  "endereco": "EZ Tower, Sao Paulo Brazil", "andar": "1ª", "location_id": "BR-SAO-EZTOW",
+                  "carga": "7H12", "fator": 1, "valores": {MES.chave: {"mop": 5, "home": 0, "staff_ic": 0,
+                                                                       "staff_ho": 0}}}
+        subir.salvar_forecast([frente], [], "f.xlsx")
+        assert "BR-SAO-EZTOW" in {l["location_id"] for l in banco.locais(somente_ativos=True)}

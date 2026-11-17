@@ -55,7 +55,9 @@ ENDERECOS = [
     ("tagipuru", "BR-SAO-TAGIP"),
     ("barueri", "BR-BAR-ARAGU"),
     ("araguaia", "BR-BAR-ARAGU"),
-    ("ez tower", "BR-SAO-EZTOW"),
+    # No forecast, "EZ Tower, Sao Paulo Brazil" é a Alameda Araguaia 2104 (aba DExPARA CEP
+    # do próprio forecast) = o prédio que no CMAP se chama Barueri Araguaia.
+    ("ez tower", "BR-BAR-ARAGU"),
 ]
 
 # Apelido curto de cada local, para montar o Resv. Desc. (ex.: CARREFOUR_MAL3).

@@ -11,6 +11,7 @@ Uma coluna por reserva do CMAP (MAS + local), com as mesmas linhas do quadro:
             PA's disponíveis = reservadas no CMAP (TEAMLEADER-DIR) e % ocupação
   Total     posições ocupadas, disponíveis e % de ocupação geral
 """
+import math
 import re
 from collections import defaultdict
 
@@ -24,6 +25,7 @@ CURTOS = {
     "BR-SAO-TAGIP": "BF4", "BR-BAR-ARAGU": "BAR", "BR-CUR-JOSEL-01": "JL1",
     "BR-CUR-JOSEL-02": "JL2", "BR-CUR-JOSEL-03": "JL3", "BR-CUR-MALDE-01": "M2",
     "BR-CUR-MALDE-02": "M3", "BR-PON-RUASE": "PG", forecast.LOCAL_HOME: "HO",
+    "BR-SAO-EZTOW": "EZ Tower", "BR-CUR-MURIC": "Muricy",
 }
 CATEGORIAS_STAFF = [
     ("supervisores", "Staff - Supervisores / Coordenadores"),
@@ -104,26 +106,50 @@ def _detalhes():
 
 def visao(mes: meses.Mes):
     """
-    Devolve [{"gerente", "colunas": [...], "total": {...}}], um bloco por gestor.
+    Um quadro por gestor e cidade: [{"gerente", "cidade", "colunas": [...], "total": {...}}].
+
+    1) Monta as colunas (conta + prédio) de cada gestor com o que o forecast pede.
+       Home office entra na cidade do ENDEREÇO da frente (ex.: TIM - PG fica em Ponta Grossa).
+    2) Junta com o que está reservado no CMAP. Quando o mesmo MAS + prédio é de mais de um
+       gestor/cidade (ex.: Claro cobrança em M3), o reservado é DIVIDIDO na proporção das
+       PAs ocupadas de cada coluna — senão ele apareceria inteiro em todos.
     """
-    frentes = subir.frentes_salvas()
+    colunas = _colunas_do_forecast(mes)
+    _juntar_cmap(colunas, mes)
+
+    blocos = defaultdict(list)
+    for c in colunas:
+        blocos[(c["gerente"], c["cidade"])].append(c)
+    ordem = banco.ORDEM_CIDADES
+    lista = [{"gerente": g, "cidade": cid, **_quadro(cols)} for (g, cid), cols in blocos.items()]
+    lista.sort(key=lambda b: (ordem.index(b["cidade"]) if b["cidade"] in ordem else 99, b["gerente"]))
+    return lista
+
+
+def _cidade_do_endereco(frente) -> str:
+    """Cidade pelo endereço do forecast (o andar "HOME OFFICE" não muda a cidade)."""
+    local = forecast.local_do_endereco(frente.get("endereco", ""), "")
+    if local and local != forecast.LOCAL_HOME:
+        return banco.cidade(local)
+    if frente["location_id"] and frente["location_id"] != forecast.LOCAL_HOME:
+        return banco.cidade(frente["location_id"])
+    return "Home Office"
+
+
+def _colunas_do_forecast(mes):
+    """Colunas (gestor, cidade, MAS, local) com HCs e PAs ocupadas pelo forecast."""
     de_para = subir.de_para()
     ativos = {l["location_id"] for l in banco.locais(somente_ativos=True)}
-    detalhes = _detalhes()
-    receptivo = subir._receptivo()            # receptivo digitado na tela Reserva
-
     por_gerente = defaultdict(list)
-    for f in frentes:
+    for f in subir.frentes_salvas():
         por_gerente[f.get("gerencia") or "(sem gestor)"].append(f)
 
-    blocos = []
-    for gerente in sorted(por_gerente):
-        lista = por_gerente[gerente]
-        # PAs pela regra, calculadas só com as frentes deste gestor
+    colunas = []
+    for gerente, lista in por_gerente.items():
+        # PAs no prédio pela regra, calculadas só com as frentes deste gestor
         calc = forecast.calcular(lista, de_para, [mes], lambda l: l in ativos)
-
-        # HCs brutos por coluna (MAS + local)
         brutos = defaultdict(lambda: {"hc": 0.0, "manha": 0.0, "tarde": 0.0, "home": 0.0,
+                                      "pas_home": 0.0, "staff_home": 0.0,
                                       "andares": set(), "contas": set(), "lobs": set()})
         for f in lista:
             dp = de_para.get(f["lob"])
@@ -131,75 +157,107 @@ def visao(mes: meses.Mes):
             if not dp or not dp.get("project_id") or not v or not f["location_id"]:
                 continue
             home = min(v["home"], v["mop"])
-            if f["location_id"] == forecast.LOCAL_HOME:
-                destinos = [(forecast.LOCAL_HOME, v["mop"], 0, 0, v["mop"])]
+            cidade = _cidade_do_endereco(f)
+            if f["location_id"] == forecast.LOCAL_HOME:          # frente 100% home office
+                destinos = [(forecast.LOCAL_HOME, v["mop"], 0, 0, v["mop"],
+                             v["staff_ic"] + v["staff_ho"])]
             else:
                 meio = f["fator"] == 2                  # manhã/tarde só nas frentes 6H20
                 destinos = [(f["location_id"], v["mop"], v.get("ic_manha", 0) if meio else 0,
-                             v.get("ic_tarde", 0) if meio else 0, home)]
-                if home:
-                    destinos.append((forecast.LOCAL_HOME, home, 0, 0, home))
-            for loc, hc, manha, tarde, ho in destinos:
-                b = brutos[(dp["project_id"], loc)]
+                             v.get("ic_tarde", 0) if meio else 0, home, 0)]
+                if home or v["staff_ho"]:
+                    destinos.append((forecast.LOCAL_HOME, home, 0, 0, home, v["staff_ho"]))
+            for loc, hc, manha, tarde, ho, staff_ho in destinos:
+                if loc not in ativos:
+                    continue
+                b = brutos[(dp["project_id"], loc, cidade if loc == forecast.LOCAL_HOME
+                            else banco.cidade(loc))]
                 b["hc"] += hc
                 b["manha"] += manha
                 b["tarde"] += tarde
                 b["home"] += ho
+                if loc == forecast.LOCAL_HOME:
+                    b["pas_home"] += ho               # em casa: 1 pessoa = 1 posição no CMAP
+                    b["staff_home"] += staff_ho
                 b["andares"].add(andar_curto(f["andar"]) if loc == f["location_id"] else "HO")
-                b["contas"].add((dp.get("cliente") or f["conta"]).upper())
+                b["contas"].add((f["conta"] or dp.get("cliente") or "").upper())
                 b["lobs"].add(f["lob"])
 
-        colunas = []
-        for chave, b in brutos.items():
-            if chave not in calc:                        # local que não acompanho
-                continue
-            project_id, location_id = chave
-            res_ag, staff_cmap = _reservado(project_id, location_id, mes)
-            # Projeto compartilhado com o receptivo: a parte dele não é do outbound
-            rec = min(receptivo.get(chave, {}).get(mes.chave, 0), res_ag)
-            res_ag -= rec
-            res_st = sum(staff_cmap.values())                 # todo staff direto reservado
-            d = detalhes.get(chave)
-            digitado = {k: (d[k] if d else 0) for k, _ in CATEGORIAS_STAFF}
-            # Linhas de staff: o que você digitou na tela; sem nada digitado, o que está
-            # no CMAP (cada código na sua categoria).
-            staff_do_cmap = not sum(digitado.values())
-            staff_linhas = ({k: staff_cmap.get(k, 0) for k, _ in CATEGORIAS_STAFF} if staff_do_cmap
-                            else digitado)
-            staff_linhas["outros"] = staff_cmap.get("outros", 0) if staff_do_cmap else 0
-            staff_ocup = sum(staff_linhas.values())
-            staff_do_forecast = not staff_ocup and bool(calc[chave]["staff"].get(mes.chave, 0))
-            if staff_do_forecast:                             # nada no CMAP nem digitado
-                staff_ocup = calc[chave]["staff"][mes.chave]
-            ag_ocup = calc[chave]["agentes"].get(mes.chave, 0)
+        for (project_id, location_id, cidade), b in brutos.items():
+            if location_id == forecast.LOCAL_HOME:
+                ag_ocup = math.ceil(round(b["pas_home"], 6))
+                staff_fc = math.ceil(round(b["staff_home"], 6))
+            else:
+                c = calc.get((project_id, location_id), {"agentes": {}, "staff": {}})
+                ag_ocup = c["agentes"].get(mes.chave, 0)
+                staff_fc = c["staff"].get(mes.chave, 0)
             andares = sorted(a for a in b["andares"] if a != "HO") or ["HO"]
             colunas.append({
+                "gerente": gerente, "cidade": cidade,
                 "project_id": project_id, "location_id": location_id,
                 "conta": " / ".join(sorted(b["contas"])),
-                "site": f"{CURTOS.get(location_id, location_id)} - {', '.join(andares)}"
-                        if location_id != forecast.LOCAL_HOME else "Home Office",
-                "particularidades": d["particularidades"] if d else "",
+                "site": (f"{CURTOS.get(location_id, location_id)} - {', '.join(andares)}"
+                         if location_id != forecast.LOCAL_HOME else "Home Office"),
                 "lobs": sorted(b["lobs"]),
                 "hc": round(b["hc"]), "manha": round(b["manha"]), "tarde": round(b["tarde"]),
-                "home": round(b["home"]),
-                "ag_ocup": ag_ocup, "ag_disp": res_ag, "ag_pct": _pct(ag_ocup, res_ag),
-                "receptivo": rec,
-                "staff": staff_linhas, "staff_do_cmap": staff_do_cmap,
-                "staff_digitado": digitado, "staff_do_forecast": staff_do_forecast,
-                "st_ocup": staff_ocup, "st_disp": res_st, "st_pct": _pct(staff_ocup, res_st),
-                "tot_ocup": ag_ocup + staff_ocup, "tot_disp": res_ag + res_st,
+                "home": round(b["home"]), "ag_ocup": ag_ocup, "staff_fc": staff_fc,
             })
-        # Um quadro por CIDADE dentro de cada gestor (São Paulo, Curitiba, Ponta Grossa...)
-        por_cidade = defaultdict(list)
-        for c in colunas:
-            por_cidade[banco.cidade(c["location_id"])].append(c)
-        for cidade in por_cidade:
-            blocos.append({"gerente": gerente, "cidade": cidade,
-                           **_quadro(por_cidade[cidade])})
-    # ordem: cidade (São Paulo, Curitiba, Ponta Grossa, Home Office) e depois gestor
-    ordem = banco.ORDEM_CIDADES
-    blocos.sort(key=lambda b: (ordem.index(b["cidade"]) if b["cidade"] in ordem else 99, b["gerente"]))
-    return blocos
+    return colunas
+
+
+def _dividir(total: int, pesos: list) -> list[int]:
+    """Divide um inteiro na proporção dos pesos (maiores restos recebem a sobra)."""
+    if len(pesos) == 1:
+        return [total]
+    soma = sum(pesos)
+    pesos = pesos if soma else [1] * len(pesos)
+    soma = sum(pesos)
+    exatos = [total * p / soma for p in pesos]
+    partes = [math.floor(x) for x in exatos]
+    for i in sorted(range(len(pesos)), key=lambda i: exatos[i] - partes[i], reverse=True)[:total - sum(partes)]:
+        partes[i] += 1
+    return partes
+
+
+def _juntar_cmap(colunas, mes):
+    """Coloca o reservado no CMAP (dividido quando compartilhado), staff e percentuais."""
+    detalhes = _detalhes()
+    receptivo = subir._receptivo()            # receptivo digitado na tela Reserva
+    grupos = defaultdict(list)
+    for c in colunas:
+        grupos[(c["project_id"], c["location_id"])].append(c)
+
+    categorias = [k for k, _ in CATEGORIAS_STAFF]
+    for chave, cols in grupos.items():
+        res_ag, staff_cmap = _reservado(*chave, mes)
+        # Projeto compartilhado com o receptivo: a parte dele não é do outbound
+        rec = min(receptivo.get(chave, {}).get(mes.chave, 0), res_ag)
+        d = detalhes.get(chave)
+        digitado = {k: (d[k] if d else 0) for k in categorias}
+        staff_do_cmap = not sum(digitado.values())
+        # Linhas de staff: o que você digitou; sem nada digitado, o que está no CMAP.
+        fonte = dict(staff_cmap) if staff_do_cmap else {**digitado, "outros": 0}
+        pesos = [c["ag_ocup"] for c in cols]
+        partes_ag = _dividir(res_ag - rec, pesos)
+        partes_rec = _dividir(rec, pesos)
+        partes_st = {k: _dividir(fonte.get(k, 0), pesos) for k in categorias + ["outros"]}
+        partes_disp_st = _dividir(sum(staff_cmap.values()), pesos)
+        for i, c in enumerate(cols):
+            staff = {k: partes_st[k][i] for k in categorias + ["outros"]}
+            st_ocup = sum(staff.values())
+            do_forecast = not st_ocup and bool(c["staff_fc"])
+            if do_forecast:                       # nada no CMAP nem digitado
+                st_ocup = c["staff_fc"]
+            ag_disp, st_disp = partes_ag[i], partes_disp_st[i]
+            c.update({
+                "particularidades": d["particularidades"] if d else "",
+                "dividido": len(cols) > 1,
+                "ag_disp": ag_disp, "ag_pct": _pct(c["ag_ocup"], ag_disp), "receptivo": partes_rec[i],
+                "staff": staff, "staff_do_cmap": staff_do_cmap, "staff_digitado": digitado,
+                "staff_do_forecast": do_forecast,
+                "st_ocup": st_ocup, "st_disp": st_disp, "st_pct": _pct(st_ocup, st_disp),
+                "tot_ocup": c["ag_ocup"] + st_ocup, "tot_disp": ag_disp + st_disp,
+            })
 
 
 def _quadro(colunas):
@@ -233,3 +291,12 @@ def gerentes():
            WHERE fr.gerencia != '' AND (EXISTS (SELECT 1 FROM forecast f WHERE f.lob = fr.lob)
                  OR EXISTS (SELECT 1 FROM frentes_manuais m WHERE m.lob = fr.lob))
            ORDER BY fr.gerencia""")]
+
+
+def sem_mas_por_gestor():
+    """Frentes do forecast sem MAS (ficam fora dos quadros), contadas por gestor."""
+    return banco.db().execute(
+        """SELECT CASE WHEN fr.gerencia = '' THEN '(sem gestor)' ELSE fr.gerencia END AS gerente,
+                  COUNT(DISTINCT fr.lob) AS frentes, group_concat(DISTINCT fr.lob) AS lobs
+           FROM frentes fr JOIN forecast f ON f.lob = fr.lob
+           WHERE fr.project_id = '' GROUP BY 1 ORDER BY 1""").fetchall()

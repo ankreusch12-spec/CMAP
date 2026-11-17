@@ -33,6 +33,11 @@ def salvar_forecast(frentes, avisos, nome_arquivo: str, origem: str = ""):
             avisos = [*avisos, f"{f['lob']}: estava incluída à mão e agora vem no forecast — "
                                "passou a usar os números do forecast."]
     con.execute("DELETE FROM forecast")
+    # Os endereços do forecast estão certos: todo prédio onde há frente passa a ser
+    # acompanhado (ex.: Smiles na EZ Tower, Santander no Muricy).
+    for f in frentes:
+        if f["location_id"]:
+            con.execute("UPDATE locais SET ativo = 1 WHERE location_id = ?", (f["location_id"],))
     for f in frentes:
         con.execute("""INSERT INTO frentes (lob, act_id, conta, gerencia) VALUES (?, ?, ?, ?)
                        ON CONFLICT (lob) DO UPDATE SET act_id = excluded.act_id,

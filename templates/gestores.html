@@ -43,9 +43,19 @@
   WFM → plan, QUAL/TRAIN/monitoria/auditoria → qualidade, OPERATSMGMT/OPERATIONS → gerentes.
   Só códigos diretos (com DIR); indiretos e de apoio não entram. Digitando em
   “Editar particularidades e staff”, vale o que você digitou.
+  <b>*</b> = o mesmo MAS + prédio é de mais de um gestor ou cidade: o reservado no CMAP é dividido
+  na proporção das PAs ocupadas. Home office aparece na cidade do endereço da frente.
   Cores: <span class="pct ok">90–100%</span> <span class="pct sobra">abaixo de 90%</span>
   <span class="pct falta">acima de 100%</span>.
 </p>
+
+{% if sem_mas %}
+<div class="aviso aviso-erro">
+  Frentes <b>sem MAS</b> não aparecem nos quadros:
+  {% for g in sem_mas %}<b>{{ g.gerente }}</b> ({{ g.frentes }}){{ ', ' if not loop.last }}{% endfor %}.
+  <a href="{{ url_for('frentes') }}">Preencher em Frentes</a> (a barrinha vermelha marca as que faltam).
+</div>
+{% endif %}
 
 {% if not info %}
   <div class="vazio">Importe o forecast em <a href="{{ url_for('importar') }}">Importar</a> para ver os gestores.</div>
@@ -65,7 +75,7 @@
   <thead>
     <tr class="cab-conta">
       <th class="fixa">CONTA</th>
-      {% for c in b.colunas %}<th title="{{ c.project_id }} · {{ c.lobs|join(' · ') }}">{{ c.titulo }}</th>{% endfor %}
+      {% for c in b.colunas %}<th title="{{ c.project_id }} · {{ c.lobs|join(' · ') }}">{{ c.titulo }}{% if c.dividido %} <span title="MAS + prédio com mais de um gestor/cidade: reservado dividido">*</span>{% endif %}</th>{% endfor %}
       <th class="col-total">TOTAL</th>
     </tr>
     <tr>

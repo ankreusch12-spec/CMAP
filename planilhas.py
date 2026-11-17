@@ -103,6 +103,7 @@ SITES_SUMMARY = [
     ("barueri", "BR-BAR-ARAGU"), ("bf4", "BR-SAO-TAGIP"), ("cjl1", "BR-CUR-JOSEL-01"),
     ("cjl2", "BR-CUR-JOSEL-02"), ("cjl3", "BR-CUR-JOSEL-03"), ("marechal2", "BR-CUR-MALDE-01"),
     ("marechal3", "BR-CUR-MALDE-02"), ("pontagrossa", "BR-PON-RUASE"),
+    ("eztower", "BR-SAO-EZTOW"), ("muricy", "BR-CUR-MURIC"),
 ]
 
 

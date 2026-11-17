@@ -395,6 +395,7 @@ def registrar_rotas(app: Flask):
         cidades = [c for c in banco.ORDEM_CIDADES if any(b["cidade"] == c for b in todos)]
         return render_template("gestores.html", janela=janela, mes=mes, gerente=gerente,
                                cidade=cidade, cidades=cidades,
+                               sem_mas=gestores.sem_mas_por_gestor(),
                                lista_gerentes=gestores.gerentes(), blocos=blocos,
                                editar=request.args.get("editar") == "1",
                                categorias=gestores.CATEGORIAS_STAFF, faixa=gestores.faixa,

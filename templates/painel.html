@@ -4,8 +4,8 @@
 <h1>Painel de ocupação</h1>
 <p class="ajuda">
   Por prédio, mês a mês: o reservado no CMAP de cada <b>carteira sua</b>
-  (status Confirmado e Fila mensal) e, em cinza, o das <b>outras carteiras</b> do prédio —
-  elas não são suas, mas ocupam lugar, então entram no disponível.
+  (status Confirmado e Fila mensal). O <b>disponível</b> e a <b>ocupação</b> são do prédio inteiro
+  (Total Seats menos tudo o que está reservado nele).
   <b>Total Seats</b> vem do arquivo BRA_Distribution_Capacity (aba Summary).
   Em vermelho: reservado acima dos seats.
 </p>
@@ -29,10 +29,10 @@
 {% endif %}
 
 {% macro linhas_total(lista, rotulo) %}
-  <tr class="total-local"><td class="fixa">Total reservado{{ rotulo }}</td>{% for x in lista %}<td class="num">{{ x.total }}</td>{% endfor %}</tr>
+  <tr class="total-local"><td class="fixa">Total suas carteiras{{ rotulo }}</td>{% for x in lista %}<td class="num">{{ x.minhas }}</td>{% endfor %}</tr>
   <tr><td class="fixa">Total Seats (arquivo)</td>{% for x in lista %}<td class="num">{{ x.seats or '—' }}</td>{% endfor %}</tr>
-  <tr><td class="fixa">Disponível</td>{% for x in lista %}<td class="num {{ 'negativo' if x.disp is not none and x.disp < 0 }}">{{ '—' if x.disp is none else x.disp }}</td>{% endfor %}</tr>
-  <tr class="linha-pct"><td class="fixa">Ocupação</td>{% for x in lista %}<td class="num pct">{{ '—' if x.pct is none else '{:.0%}'.format(x.pct) }}</td>{% endfor %}</tr>
+  <tr><td class="fixa">Disponível no prédio</td>{% for x in lista %}<td class="num {{ 'negativo' if x.disp is not none and x.disp < 0 }}">{{ '—' if x.disp is none else x.disp }}</td>{% endfor %}</tr>
+  <tr class="linha-pct"><td class="fixa">Ocupação do prédio</td>{% for x in lista %}<td class="num pct">{{ '—' if x.pct is none else '{:.0%}'.format(x.pct) }}</td>{% endfor %}</tr>
 {% endmacro %}
 
 {% if not grupos %}
@@ -56,19 +56,17 @@
     {% else %}
     <tr><td class="fixa recuo ajuda">nenhuma carteira sua reservada aqui</td><td colspan="{{ janela|length }}"></td></tr>
     {% endfor %}
-    <tr class="outras"><td class="fixa recuo">Outras carteiras (não são suas)</td>{% for x in l.meses %}<td class="num">{{ x.outras }}</td>{% endfor %}</tr>
     {{ linhas_total(l.meses, '') }}
   </tbody>
   {% endfor %}
   <tbody class="bloco-total">
-    <tr><td class="fixa">TOTAL {{ g.cidade|upper }} — suas carteiras</td>{% for x in g.total %}<td class="num">{{ x.minhas }}</td>{% endfor %}</tr>
-    {{ linhas_total(g.total, ' (todas as carteiras)') }}
+    <tr class="cidade"><td class="fixa">TOTAL {{ g.cidade|upper }}</td><td colspan="{{ janela|length }}"></td></tr>
+    {{ linhas_total(g.total, '') }}
   </tbody>
   {% endfor %}
   <tbody class="bloco-total">
     <tr class="cidade"><td class="fixa">TOTAL GERAL</td><td colspan="{{ janela|length }}"></td></tr>
-    <tr><td class="fixa">Suas carteiras</td>{% for x in totais %}<td class="num">{{ x.minhas }}</td>{% endfor %}</tr>
-    {{ linhas_total(totais, ' (todas as carteiras)') }}
+    {{ linhas_total(totais, '') }}
   </tbody>
 </table>
 </div>
