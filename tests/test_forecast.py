@@ -280,7 +280,7 @@ def test_categorias_de_staff_do_cmap():
     assert gestores.categoria_staff("PRODUCAGENT-DIR") is None      # agente não é staff
     assert gestores.categoria_staff("PROGTRAIN-DIR") == "qualidade"
     assert gestores.categoria_staff("TRANMONITOR-DIR") == "qualidade"
-    assert gestores.categoria_staff("AGENTAUDITO-DIR") == "qualidade"
+    assert gestores.categoria_staff("AGENTAUDITO-DIR") is None       # auditor: não usado
     assert gestores.categoria_staff("WFM-DIRBILLREG") == "plan_wfm"
     assert gestores.categoria_staff("DIROPERATI-DIR") == "gerentes"
     assert gestores.categoria_staff("OPERATIONS-DIR") == "gerentes"

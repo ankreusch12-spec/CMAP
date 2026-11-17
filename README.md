@@ -110,11 +110,12 @@ As linhas de staff vêm do que está reservado no CMAP, por Dept Code (só códi
 |---|---|
 | Supervisores / Coordenadores | TEAMLEADER-DIR, FLOORLEADER-DIR, MMSTEAMLEAD-DIR |
 | Plan / WFM | WFM-DIRECT, WFM-DIRBILLREG, WHWFM-DIR, SITWFMNOBIL-DIR |
-| Qualidade | QUALTRAIN-DIR, QUALITY-DIRSITE, PROGTRAIN-DIR, TRANMONITOR-DIR, AGENTAUDITO-DIR, AGENTEVALUA-DIR |
+| Qualidade | QUALTRAIN-DIR, QUALITY-DIRSITE, PROGTRAIN-DIR, TRANMONITOR-DIR, AGENTEVALUA-DIR |
 | Gerentes / Diretores | OPERATSMGMT-DIR, SENOPSMGMT-DIR, OPERATIONS-DIR, DIROPERATI-DIR |
 | Outros (diretos) | qualquer outro código com DIR |
 
-Indiretos (`-INDIR`) e de apoio sem DIR (ADMINFACILITIES, HRGENERALIST…) não entram. Se você digitar o staff em
+Indiretos (`-INDIR`), de apoio sem DIR (ADMINFACILITIES, HRGENERALIST…) e AGENTAUDITO-DIR (auditor, não
+usado) não entram. Agente é só o **PRODUCAGENT-DIR** (Agente de Produção Direto COGS (SITE)). Se você digitar o staff em
 “Editar particularidades e staff”, vale o digitado. Em **Reserva**, quando o forecast não traz staff para a
 reserva, o staff do CMAP fica como está.
 

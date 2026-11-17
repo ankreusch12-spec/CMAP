@@ -37,7 +37,7 @@ CATEGORIAS_STAFF = [
 # Só entram códigos DIRETOS (com "DIR" no código, sem "INDIR"): pedido da Anna,
 # "no máximo o direto". Ex.: ADMINFACILITIES, HRGENERALIST, OPERATION-INDIR ficam de fora.
 PALAVRAS_STAFF = [
-    ("qualidade", ("QUAL", "TRAIN", "TRAN", "AUDIT", "EVALU")),   # qualidade, treinamento, monitoria
+    ("qualidade", ("QUAL", "TRAIN", "TRAN", "EVALU")),            # qualidade, treinamento, monitoria
     ("plan_wfm", ("WFM", "PLAN", "REPORT")),                       # planejamento / WFM / MIS
     ("gerentes", ("MGMT", "MANAGER", "DIRECTOR", "DIROPER", "OPERATIONS-", "GERENT")),
     ("supervisores", ("LEAD", "SUPERV", "COORD")),                 # team/floor leader
@@ -48,6 +48,8 @@ def categoria_staff(dept_code: str) -> str | None:
     """'TEAMLEADER-DIR' -> 'supervisores'; agente, indireto ou não-direto -> None."""
     d = str(dept_code or "").upper()
     if d == forecast.DEPT_AGENTE or "INDIR" in d or "DIR" not in d:
+        return None
+    if "AUDIT" in d:                      # AGENTAUDITO-DIR (auditor): não é usado na operação
         return None
     for categoria, palavras in PALAVRAS_STAFF:
         if any(p in d for p in palavras):
