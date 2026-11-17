@@ -126,6 +126,21 @@ CREATE TABLE IF NOT EXISTS frentes (
     gerencia      TEXT NOT NULL DEFAULT ''  -- gestor (coluna GERENCIA do forecast)
 );
 
+-- Carteiras ativas que NÃO estão no forecast (incluídas à mão em Frentes).
+-- Os números valem para todos os meses.
+CREATE TABLE IF NOT EXISTS frentes_manuais (
+    lob          TEXT PRIMARY KEY REFERENCES frentes(lob) ON DELETE CASCADE,
+    location_id  TEXT NOT NULL,
+    andar        TEXT NOT NULL DEFAULT '',
+    carga        TEXT NOT NULL,              -- 7H12 (integral) ou 6H20
+    mop          INTEGER NOT NULL,           -- HCs (ativo + aviso prévio)
+    home         INTEGER NOT NULL DEFAULT 0,
+    staff_ic     INTEGER NOT NULL DEFAULT 0,
+    staff_ho     INTEGER NOT NULL DEFAULT 0,
+    ic_manha     INTEGER NOT NULL DEFAULT 0, -- só 6H20 (opcional)
+    ic_tarde     INTEGER NOT NULL DEFAULT 0
+);
+
 -- Último forecast importado (uma linha por frente, local e mês).
 CREATE TABLE IF NOT EXISTS forecast (
     lob          TEXT NOT NULL,

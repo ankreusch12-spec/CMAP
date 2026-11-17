@@ -24,6 +24,14 @@ STATUS_NOVA = "Confirmado"
 def salvar_forecast(frentes, avisos, nome_arquivo: str, origem: str = ""):
     """Substitui o forecast guardado pelo novo e atualiza a lista de frentes."""
     con = banco.db()
+    # Se uma carteira incluída à mão passou a vir no forecast, o forecast assume
+    # (senão ela seria contada duas vezes).
+    manuais = {r["lob"] for r in con.execute("SELECT lob FROM frentes_manuais")}
+    for f in frentes:
+        if f["lob"] in manuais:
+            con.execute("DELETE FROM frentes_manuais WHERE lob = ?", (f["lob"],))
+            avisos = [*avisos, f"{f['lob']}: estava incluída à mão e agora vem no forecast — "
+                               "passou a usar os números do forecast."]
     con.execute("DELETE FROM forecast")
     for f in frentes:
         con.execute("""INSERT INTO frentes (lob, act_id, conta, gerencia) VALUES (?, ?, ?, ?)
@@ -88,7 +96,25 @@ def frentes_salvas():
         f["valores"][r["mes"]] = {"mop": r["mop"], "home": r["home"],
                                   "staff_ic": r["staff_ic"], "staff_ho": r["staff_ho"],
                                   "ic_manha": r["ic_manha"], "ic_tarde": r["ic_tarde"]}
-    return list(frentes.values())
+    return list(frentes.values()) + frentes_manuais()
+
+
+def frentes_manuais():
+    """
+    Carteiras incluídas à mão (fora do forecast), no mesmo formato das do forecast.
+    Os números cadastrados valem para todos os meses (24 a partir do atual).
+    """
+    lista = []
+    for r in banco.db().execute("""SELECT m.*, fr.conta, fr.gerencia FROM frentes_manuais m
+                                   JOIN frentes fr ON fr.lob = m.lob"""):
+        numeros = {"mop": r["mop"], "home": r["home"], "staff_ic": r["staff_ic"],
+                   "staff_ho": r["staff_ho"], "ic_manha": r["ic_manha"], "ic_tarde": r["ic_tarde"]}
+        lista.append({
+            "lob": r["lob"], "endereco": "", "andar": r["andar"], "location_id": r["location_id"],
+            "carga": r["carga"], "fator": forecast.CARGAS.get(r["carga"].lower(), 1),
+            "conta": r["conta"] or "", "gerencia": r["gerencia"] or "", "manual": True,
+            "valores": {m.chave: dict(numeros) for m in meses.janela(quantidade=24)}})
+    return lista
 
 
 def de_para() -> dict:

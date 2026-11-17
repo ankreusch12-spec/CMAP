@@ -226,3 +226,13 @@ pre { background: var(--barra); padding: 8px 10px; border-radius: 4px; overflow-
 .passos li.feito .marca-passo { background: var(--cnx-seafoam); color: var(--cnx-azul); }
 .passos li.feito b { color: var(--suave); }
 .resumo td.do-cmap, i.do-cmap { font-style: italic; color: var(--suave); }
+
+/* Frentes: + Incluir carteira */
+details.incluir { margin: 12px 0 16px; }
+details.incluir > summary { list-style: none; display: inline-block; }
+details.incluir > summary::-webkit-details-marker { display: none; }
+.grade-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); max-width: none; }
+.grade-campos .acoes { grid-column: 1 / -1; }
+td form { display: inline; }
+.grade-campos input, .grade-campos select, .grade-campos input.curto { width: 100%; min-width: 0; }
+details.incluir:not([open]) { border: 0; padding: 0; }

@@ -321,3 +321,67 @@ def test_sem_staff_no_forecast_nao_mexe_no_staff_do_cmap(cliente, app, tmp_path)
                     AND dept_code = 'TEAMLEADER-DIR' AND mes = ? ORDER BY shift""",
                                     (rid, meses.atual().chave)).fetchall()
         assert [tuple(x) for x in shifts] == [("DED", 5), ("NOT", 4)]   # intocado
+
+
+def test_incluir_carteira_fora_do_forecast(cliente, app, tmp_path):
+    import gestores
+    import subir
+    t = cliente.token
+    with app.app_context():
+        banco.db().execute("INSERT INTO locais (location_id, descricao) VALUES ('BR-PON-RUASE', 'PG')")
+        banco.db().commit()
+    dados = {"csrf_token": t, "lob": "cliente x - ativo", "conta": "cliente x", "gerencia": "gestor teste",
+             "project_id": "exemplo300", "project_name": "P_X", "location_id": "BR-PON-RUASE",
+             "andar": "3ª", "carga": "6H20", "mop": "40", "home": "4", "staff_ic": "2",
+             "staff_ho": "0", "ic_manha": "24", "ic_tarde": "12"}
+    # Home maior que HCs: recusado
+    r = cliente.post("/frentes/manual", data={**dados, "home": "50"}, follow_redirects=True)
+    assert "Home não pode ser maior" in r.get_data(as_text=True)
+    r = cliente.post("/frentes/manual", data=dados, follow_redirects=True)
+    html = r.get_data(as_text=True)
+    assert "CLIENTE X - ATIVO" in html and "fora do forecast" in html
+
+    with app.app_context():
+        item = next(i for i in subir.itens(meses.janela()) if i["project_id"] == "EXEMPLO300")
+        # 6H20: (40 − 4) × 24 ÷ 36 = 24 PAs, todos os meses; staff 2
+        assert {l["ag_novo"] for l in item["meses"]} == {24}
+        assert item["meses"][0]["st_novo"] == 2 and not item["reserva"]
+        bloco = next(b for b in gestores.visao(MES) if b["gerente"] == "GESTOR TESTE")
+        assert bloco["colunas"][0]["ag_ocup"] == 24
+        assert "GESTOR TESTE" in gestores.gerentes()
+
+    # editar: troca para integral
+    cliente.post("/frentes/manual", data={**dados, "carga": "7H12"})
+    with app.app_context():
+        item = next(i for i in subir.itens(meses.janela()) if i["project_id"] == "EXEMPLO300")
+        assert item["meses"][0]["ag_novo"] == 36
+    assert "Salvar alterações" in cliente.get("/frentes?editar=CLIENTE X - ATIVO").get_data(as_text=True)
+
+    # excluir
+    cliente.post("/frentes/manual/excluir", data={"csrf_token": t, "lob": "CLIENTE X - ATIVO"})
+    with app.app_context():
+        assert not any(i["project_id"] == "EXEMPLO300" for i in subir.itens(meses.janela()))
+
+
+def test_carteira_manual_que_passa_a_vir_no_forecast(cliente, app, tmp_path):
+    import subir
+    t = cliente.token
+    with app.app_context():
+        banco.db().execute("INSERT INTO locais (location_id, descricao) VALUES ('BR-CUR-MALDE-02', 'M3')")
+        banco.db().commit()
+    cliente.post("/frentes/manual", data={
+        "csrf_token": t, "lob": "FRENTE INTEGRAL", "project_id": "EXEMPLO100",
+        "location_id": "BR-CUR-MALDE-02", "carga": "7H12", "mop": "99"})
+    caminho = tmp_path / "f.xlsx"
+    forecast_ficticio(caminho)                     # o forecast traz "FRENTE INTEGRAL"
+    with caminho.open("rb") as f:
+        cliente.post("/importar/forecast", data={"csrf_token": t, "arquivo": (f, "f.xlsx")},
+                     content_type="multipart/form-data")
+    with app.app_context():
+        assert subir.frentes_manuais() == []        # o forecast assumiu
+        assert "agora vem no forecast" in subir.info_forecast()["avisos"]
+    # e não dá para criar manual com nome que já vem no forecast
+    r = cliente.post("/frentes/manual", data={
+        "csrf_token": t, "lob": "FRENTE INTEGRAL", "project_id": "EXEMPLO100",
+        "location_id": "BR-CUR-MALDE-02", "carga": "7H12", "mop": "5"}, follow_redirects=True)
+    assert "já vem no forecast" in r.get_data(as_text=True)

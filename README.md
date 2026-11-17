@@ -20,7 +20,7 @@ nas reservas e na importação. A lista fica em `banco.py` (`MEUS_LOCAIS`) e pod
 |---|---|---|
 | **O que subir** | Forecast × o que está no CMAP, por reserva (MAS + local) e mês: ▲ aumentar, ▼ reduzir, reservas novas. Botão **✔ Lançado no CMAP** atualiza o controle e registra o lançamento. | — |
 | **Gestores** | “Resumo CMAP - Ocupação prédios” por gestor (GERENCIA do forecast): uma coluna por conta/prédio com HCs, PA's ocupadas × reservadas, staff e % de ocupação; particularidades e staff detalhado editáveis. | — |
-| **Frentes** | De-para LOB WFM → MAS (Project ID), preenchido uma vez (pode vir do controle antigo). | — |
+| **Frentes** | De-para LOB WFM → MAS (Project ID), preenchido uma vez (pode vir do controle antigo). **+ Incluir carteira**: frente ativa que não está no forecast (local, carga, HCs, home, staff, gestor e MAS; os números valem para todos os meses). Se depois ela passar a vir no forecast, o forecast assume. | — |
 | **Painel** | Ocupação por cidade e local, mês a mês: Res, Avai, % (mesma conta da planilha), com subtotal por cidade. Negativo em vermelho. | Aba *Summary* da planilha |
 | **Ver reserva** | Lista de reservas com filtro em cada coluna, “Cópia” e “Mostrar tudo”. | *Ver reserva* |
 | **Reserva → Perfil** | Resv. Desc., ID/nome do projeto, cliente, local e status. | aba *Perfil* |

@@ -80,6 +80,14 @@ def texto(campo: str, obrigatorio: bool = True) -> str:
     return valor
 
 
+def inteiro(campo: str, maximo: int = 100000) -> int:
+    """Número inteiro de 0 até `maximo` (vazio = 0)."""
+    bruto = request.form.get(campo, "").strip() or "0"
+    if not bruto.isdigit() or int(bruto) > maximo:
+        raise ValueError(f"“{campo}” precisa ser um número inteiro de 0 a {maximo}.")
+    return int(bruto)
+
+
 def codigo(campo: str) -> str:
     valor = texto(campo).upper()
     if not RE_CODIGO.match(valor):
@@ -377,11 +385,83 @@ def registrar_rotas(app: Flask):
     @app.get("/frentes")
     def frentes():
         avisar_forecast()
-        lista = banco.db().execute(
+        con = banco.db()
+        lista = con.execute(
             """SELECT fr.*, (SELECT group_concat(DISTINCT f.endereco || ' ' || f.andar)
-                             FROM forecast f WHERE f.lob = fr.lob) AS enderecos
-               FROM frentes fr ORDER BY fr.project_id != '', fr.conta, fr.lob""").fetchall()
-        return render_template("frentes.html", frentes=lista)
+                             FROM forecast f WHERE f.lob = fr.lob) AS enderecos,
+                      m.lob IS NOT NULL AS manual, m.location_id AS local_manual, m.andar AS andar_manual
+               FROM frentes fr LEFT JOIN frentes_manuais m ON m.lob = fr.lob
+               ORDER BY fr.project_id != '', m.lob IS NULL, fr.conta, fr.lob""").fetchall()
+        # "Editar" de uma carteira manual: traz os dados para o formulário
+        editar = request.args.get("editar", "")
+        em_edicao = con.execute("""SELECT m.*, fr.* FROM frentes_manuais m JOIN frentes fr
+                                   ON fr.lob = m.lob WHERE m.lob = ?""", (editar,)).fetchone()
+        return render_template("frentes.html", frentes=lista, em_edicao=em_edicao,
+                               locais=banco.locais(somente_ativos=True),
+                               lista_gerentes=gestores.gerentes())
+
+    @app.post("/frentes/manual")
+    def salvar_frente_manual():
+        """+ Incluir carteira: uma frente ativa que não está no forecast."""
+        con = banco.db()
+        try:
+            lob = texto("lob").upper()
+            conta = texto("conta", obrigatorio=False).upper()
+            gerencia = texto("gerencia", obrigatorio=False).upper()
+            mas = codigo("project_id")
+            nome = texto("project_name", obrigatorio=False)
+            location_id = texto("location_id")
+            if not con.execute("SELECT 1 FROM locais WHERE location_id = ? AND ativo = 1",
+                               (location_id,)).fetchone():
+                raise ValueError("Escolha um local da lista.")
+            andar = texto("andar", obrigatorio=False)[:30]
+            carga = request.form.get("carga", "")
+            if carga not in ("7H12", "6H20"):
+                raise ValueError("Escolha a carga: 7H12 (integral) ou 6H20.")
+            n = {campo: inteiro(campo) for campo in
+                 ("mop", "home", "staff_ic", "staff_ho", "ic_manha", "ic_tarde")}
+            if n["home"] > n["mop"]:
+                raise ValueError("Home não pode ser maior que os HCs (MOP).")
+            # não deixa "roubar" o nome de uma frente que vem do forecast
+            if con.execute("SELECT 1 FROM forecast WHERE lob = ? LIMIT 1", (lob,)).fetchone():
+                raise ValueError(f"“{lob}” já vem no forecast. Use outro nome para a carteira manual.")
+        except ValueError as erro:
+            flash(str(erro), "erro")
+            return redirect(url_for("frentes"))
+        con.execute("""INSERT INTO frentes (lob, conta, gerencia, project_id, project_name, cliente)
+                       VALUES (?, ?, ?, ?, ?, ?)
+                       ON CONFLICT (lob) DO UPDATE SET conta = excluded.conta,
+                         gerencia = excluded.gerencia, project_id = excluded.project_id,
+                         project_name = excluded.project_name, cliente = excluded.cliente""",
+                    (lob, conta, gerencia, mas, nome, conta))
+        con.execute("""INSERT INTO frentes_manuais (lob, location_id, andar, carga, mop, home,
+                           staff_ic, staff_ho, ic_manha, ic_tarde)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT (lob) DO UPDATE SET location_id = excluded.location_id,
+                         andar = excluded.andar, carga = excluded.carga, mop = excluded.mop,
+                         home = excluded.home, staff_ic = excluded.staff_ic,
+                         staff_ho = excluded.staff_ho, ic_manha = excluded.ic_manha,
+                         ic_tarde = excluded.ic_tarde""",
+                    (lob, location_id, andar, carga, *n.values()))
+        banco.registrar("Carteira manual salva", f"{lob} → {mas} em {location_id} ({carga}): "
+                        f"{n['mop']} HCs, home {n['home']}, staff {n['staff_ic'] + n['staff_ho']}")
+        con.commit()
+        flash(f"Carteira {lob} salva. Ela já entra no O que subir e em Gestores.", "ok")
+        return redirect(url_for("frentes"))
+
+    @app.post("/frentes/manual/excluir")
+    def excluir_frente_manual():
+        lob = request.form.get("lob", "")
+        con = banco.db()
+        if not con.execute("SELECT 1 FROM frentes_manuais WHERE lob = ?", (lob,)).fetchone():
+            abort(404)
+        con.execute("DELETE FROM frentes_manuais WHERE lob = ?", (lob,))
+        if not con.execute("SELECT 1 FROM forecast WHERE lob = ? LIMIT 1", (lob,)).fetchone():
+            con.execute("DELETE FROM frentes WHERE lob = ?", (lob,))
+        banco.registrar("Carteira manual excluída", lob)
+        con.commit()
+        flash(f"Carteira {lob} excluída. As reservas no CMAP não mudam.", "ok")
+        return redirect(url_for("frentes"))
 
     @app.post("/frentes")
     def salvar_frente():

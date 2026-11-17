@@ -213,5 +213,7 @@ def visao(mes: meses.Mes):
 
 def gerentes():
     return [g["gerencia"] for g in banco.db().execute(
-        "SELECT DISTINCT fr.gerencia FROM frentes fr JOIN forecast f ON f.lob = fr.lob "
-        "WHERE fr.gerencia != '' ORDER BY fr.gerencia")]
+        """SELECT DISTINCT fr.gerencia FROM frentes fr
+           WHERE fr.gerencia != '' AND (EXISTS (SELECT 1 FROM forecast f WHERE f.lob = fr.lob)
+                 OR EXISTS (SELECT 1 FROM frentes_manuais m WHERE m.lob = fr.lob))
+           ORDER BY fr.gerencia""")]
