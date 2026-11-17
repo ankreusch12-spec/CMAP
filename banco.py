@@ -202,6 +202,18 @@ CREATE TABLE IF NOT EXISTS receptivo (
     PRIMARY KEY (project_id, location_id, mes)
 );
 
+-- Linhas das abas de cada prédio do BRA_Distribution_Capacity (como no arquivo).
+CREATE TABLE IF NOT EXISTS predios_arquivo (
+    location_id  TEXT NOT NULL,
+    ordem        INTEGER NOT NULL,
+    chave        TEXT NOT NULL DEFAULT '',   -- coluna A (cliente/projeto)
+    andar        TEXT NOT NULL DEFAULT '',
+    descricao    TEXT NOT NULL DEFAULT '',   -- ex.: Claro Premium (44) / Claro Empresas (58/122)
+    seats        INTEGER NOT NULL DEFAULT 0, -- Total Seats (Prod + TL)
+    meses        TEXT NOT NULL DEFAULT '{}', -- {"2026-11": [Res, Avai], ...}
+    PRIMARY KEY (location_id, ordem)
+);
+
 -- O que veio no último arquivo do CMAP importado (para comparar com o controle).
 CREATE TABLE IF NOT EXISTS cmap_arquivo (
     project_id   TEXT NOT NULL,
@@ -477,6 +489,124 @@ def ocupacao(janela: list[meses.Mes]):
         _completar(g["total"])
     _completar(geral)
     return list(grupos.values()), geral
+
+
+def carteiras_da_linha(chave, descricao, carteiras=None) -> list[str]:
+    """
+    Minhas carteiras numa linha do arquivo. Andares compartilhados listam várias
+    ("Natura/Ligga/BMG/Via Varejo") — cada pedaço é conferido.
+    """
+    achadas = set()
+    principal = carteira_de(chave, descricao, carteiras)
+    if principal:
+        achadas.add(principal)
+    for pedaco in re.split(r"[/+]| e ", str(descricao or "")):
+        c = carteira_de(pedaco, "", carteiras)
+        if c:
+            achadas.add(c)
+    return sorted(achadas)
+
+
+def _mesma_carteira(a: str, b: str) -> bool:
+    """'CLARO' (parte comum, ex.: receptivo) combina com 'CLARO COBRANÇA'."""
+    return a == b or a.startswith(b + " ") or b.startswith(a + " ")
+
+
+def painel_arquivo(janela: list[meses.Mes]):
+    """
+    Painel igual às abas de cada prédio do BRA_Distribution_Capacity, só com as linhas
+    das MINHAS carteiras: andar, descrição, Total Seats, Res e Avai mês a mês (do arquivo).
+    Quando a carteira tem receptivo (projeto RCV ou digitado na Reserva), a linha ganha
+    "↳ receptivo" e "↳ outbound" logo abaixo.
+    Devolve (grupos, total_geral): grupos = [{"cidade", "locais": [...], "total"}].
+    """
+    import json
+    carteiras = minhas_carteiras()
+    receptivo = _receptivo_por_carteira(janela)
+    ativos = {l["location_id"]: l for l in locais(somente_ativos=True)}
+    por_local = defaultdict(list)
+    for r in db().execute("SELECT * FROM predios_arquivo ORDER BY location_id, ordem"):
+        if r["location_id"] not in ativos:
+            continue
+        cart = carteiras_da_linha(r["chave"], r["descricao"], carteiras)
+        valores = json.loads(r["meses"])
+        res = [(valores.get(m.chave) or [None, None])[0] for m in janela]
+        avai = [(valores.get(m.chave) or [None, None])[1] for m in janela]
+        if not cart or (not r["seats"] and not any(res)):
+            continue                                   # não é minha / linha vazia
+        por_local[r["location_id"]].append({"andar": r["andar"], "descricao": r["descricao"],
+                                            "carteiras": cart, "seats": r["seats"],
+                                            "res": res, "avai": avai, "receptivo": None})
+    grupos: dict[str, dict] = {}
+    geral = _vazio_arq(janela)
+    for loc, linhas in por_local.items():
+        # receptivo vai na 1ª linha com reserva de cada carteira (não repete)
+        usados = set()
+        for l in linhas:
+            if not any(l["res"]):
+                continue
+            rec = [0] * len(janela)
+            for (rloc, rcart), por_mes in receptivo.items():
+                if rloc == loc and (rloc, rcart) not in usados and \
+                        any(_mesma_carteira(rcart, c) for c in l["carteiras"]):
+                    usados.add((rloc, rcart))
+                    rec = [a + b for a, b in zip(rec, por_mes)]
+            if any(rec):
+                l["receptivo"] = rec
+                l["outbound"] = [(x or 0) - y for x, y in zip(l["res"], rec)]
+        total = _somar_linhas(linhas, janela)
+        cid = cidade(loc)
+        grupo = grupos.setdefault(cid, {"cidade": cid, "locais": [], "total": _vazio_arq(janela)})
+        grupo["locais"].append({"local": ativos[loc], "linhas": linhas, "total": total})
+        for alvo in (grupo["total"], geral):
+            _acumular(alvo, total)
+    ordem = {c: i for i, c in enumerate(ORDEM_CIDADES)}
+    lista = sorted(grupos.values(), key=lambda g: ordem.get(g["cidade"], 99))
+    for g in lista:
+        g["locais"].sort(key=lambda x: _ordem(x["local"]))
+    return lista, geral
+
+
+def _vazio_arq(janela):
+    return {"seats": 0, "res": [0] * len(janela), "avai": [0] * len(janela)}
+
+
+def _somar_linhas(linhas, janela):
+    total = _vazio_arq(janela)
+    for l in linhas:
+        _acumular(total, l)
+    return total
+
+
+def _acumular(alvo, x):
+    alvo["seats"] += x["seats"] or 0
+    alvo["res"] = [a + (b or 0) for a, b in zip(alvo["res"], x["res"])]
+    alvo["avai"] = [a + (b or 0) for a, b in zip(alvo["avai"], x["avai"])]
+
+
+def _receptivo_por_carteira(janela):
+    """{(local, carteira): [PAs por mês]}: projetos RCV (no CMAP) + receptivo digitado."""
+    chaves = [m.chave for m in janela]
+    dados = defaultdict(lambda: [0] * len(janela))
+    digitado = defaultdict(dict)
+    for r in db().execute("SELECT * FROM receptivo"):
+        digitado[(r["project_id"], r["location_id"])][r["mes"]] = r["qtd"]
+    for r in db().execute("""SELECT r.project_id, r.location_id, r.cliente, r.project_name, a.mes,
+                                    SUM(a.qtd) AS q FROM assentos a JOIN reservas r ON r.id = a.reserva_id
+                             WHERE r.status != 'Cancelado' AND a.dept_code = 'PRODUCAGENT-DIR'
+                             GROUP BY 1, 2, 3, 4, 5"""):
+        if r["mes"] not in chaves:
+            continue
+        cart = carteira_de(r["cliente"], r["project_name"])
+        if not cart:
+            continue
+        if eh_receptivo(r["project_name"]):
+            q = r["q"]
+        else:
+            q = min(digitado.get((r["project_id"], r["location_id"]), {}).get(r["mes"], 0), r["q"])
+        if q:
+            dados[(r["location_id"], cart)][chaves.index(r["mes"])] += q
+    return dados
 
 
 def _vazio(janela):

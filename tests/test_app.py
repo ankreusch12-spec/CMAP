@@ -96,8 +96,8 @@ def test_fluxo_completo(cliente, app, tmp_path):
         assert (mes0["total"], mes0["disp"]) == (35, -5)
         assert banco.grade_assentos(rid, janela)[1]["dept_name"] == "COGS (SITE) Team Leader Direct"
 
-    # painel mostra o negativo em vermelho
-    assert 'class="num negativo"' in cliente.get("/").get_data(as_text=True)
+    # sem a planilha de capacidade, o Painel pede para importar
+    assert "BRA_Distribution_Capacity" in cliente.get("/").get_data(as_text=True)
 
     # quantidade inválida é recusada
     dados[f"q_0_{janela[0].chave}"] = "-3"
@@ -340,3 +340,62 @@ def test_painel_separa_minhas_carteiras_das_outras(cliente, app):
         x = local["meses"][0]
         assert (x["minhas"], x["outras"], x["total"], x["disp"]) == (30, 50, 80, 20)
         assert [r["cliente"] for r in banco.reservas()] == ["CLIENTEAZUL"]     # Ver reserva: só a minha
+
+
+
+def _bra_ficticio(caminho):
+    """BRA_Distribution_Capacity fictício: Summary + aba do prédio com 2 tabelas e um cenário."""
+    livro = Workbook()
+    resumo = livro.active
+    resumo.title = "Summary"
+    for linha in [[None, "SITE", "Total Seats"], [None, "BF4", 300]]:
+        resumo.append(linha)
+    aba = livro.create_sheet("BF4")
+    cab_meses = [None, None, None, None, "TOWER A", "Nov", None, "Dec"]
+    aba.append(cab_meses)
+    aba.append([None, "BF4", "TOWER A", None, "Total Seats", "Res", "Avai", "Res", "Avai"])
+    aba.append(["p_cliente azul cobranca", "2F", "Cliente Azul (100)", None, 100, 90, 10, 95, 5])
+    aba.append(["outro", "1F", "Outro Cliente (50)", None, 50, 50, 0, 50, 0])
+    aba.append([None, None, None, None, 150, 140, 10, 145, 5])               # total Tower A
+    aba.append([])
+    aba.append([None, "BF4", "TOWER B", None, "Total Seats", "Res", "Avai", "Res", "Avai"])
+    aba.append(["multiclient", "3F", "Loja X / Cliente Azul", None, 150, 160, "-10", 160, "#N/D"])
+    aba.append([None, None, None, None, 150, 160, -10, 160, -10])
+    aba.append([None, "Cenário: mover Azul"])                                 # planejamento: ignorar
+    aba.append([None, "BF4", "TOWER A", None, "Total Seats", "Res", "Avai"])
+    aba.append(["p_cliente azul", "2F", "Cliente Azul (999)", None, 999, 1, 1])
+    livro.save(caminho)
+
+
+def test_painel_igual_as_abas_dos_predios(cliente, app, tmp_path):
+    import json
+    import planilhas
+    caminho = tmp_path / "BRA.xlsx"
+    _bra_ficticio(caminho)
+    with caminho.open("rb") as f:
+        seats = planilhas.ler_seats(f)
+        linhas = planilhas.ler_linhas_predios(f, seats)
+    assert seats == {"BR-SAO-TAGIP": 300}
+    assert [(l["descricao"], l["seats"]) for l in linhas] == [
+        ("Cliente Azul (100)", 100), ("Outro Cliente (50)", 50), ("Loja X / Cliente Azul", 150)]
+    janela = meses.janela()
+    nov = next(k for k in linhas[0]["meses"])
+    assert linhas[0]["meses"][nov] == [90, 10] and linhas[2]["meses"][nov] == [160, -10]
+
+    with app.app_context():
+        con = banco.db()
+        con.execute("INSERT INTO locais (location_id, descricao, capacidade) VALUES ('BR-SAO-TAGIP', 'BF4', 300)")
+        con.execute("INSERT INTO frentes (lob, conta) VALUES ('F1', 'CLIENTE AZUL')")
+        con.execute("""INSERT INTO frentes_manuais (lob, location_id, carga, mop)
+                       VALUES ('F1', 'BR-SAO-TAGIP', '7H12', 10)""")
+        con.executemany("INSERT INTO predios_arquivo VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        [(l["location_id"], l["ordem"], l["chave"], l["andar"], l["descricao"],
+                          l["seats"], json.dumps(l["meses"])) for l in linhas])
+        con.commit()
+        grupos, total = banco.painel_arquivo(janela)
+        local = grupos[0]["locais"][0]
+        # só as linhas da minha carteira (o andar compartilhado entra; "Outro Cliente" não)
+        assert [x["descricao"] for x in local["linhas"]] == ["Cliente Azul (100)", "Loja X / Cliente Azul"]
+        assert local["total"]["seats"] == 250
+    html = cliente.get("/").get_data(as_text=True)
+    assert "Cliente Azul (100)" in html and "Outro Cliente" not in html and 'class="num avai negativo"' in html

@@ -138,6 +138,106 @@ def ler_seats(arquivo) -> dict:
     return seats
 
 
+# Abas de cada prédio na BRA_Distribution_Capacity -> Location ID
+# (nome da aba sem espaço, "_" e maiúsculas).
+ABAS_PREDIOS = {
+    "barueri": "BR-BAR-ARAGU", "bf4": "BR-SAO-TAGIP", "eztower": "BR-SAO-EZTOW",
+    "cjl1": "BR-CUR-JOSEL-01", "cjl2": "BR-CUR-JOSEL-02", "cjl3": "BR-CUR-JOSEL-03",
+    "cmarechal2": "BR-CUR-MALDE-01", "cmarechal3": "BR-CUR-MALDE-02", "cmuricy": "BR-CUR-MURIC",
+    "pontagrossa": "BR-PON-RUASE",
+}
+
+
+def _numero(valor):
+    """Número da célula ou None ('#N/D', vazio, texto)."""
+    if isinstance(valor, bool):
+        return None
+    if isinstance(valor, (int, float)):
+        return int(round(valor))
+    try:
+        return int(round(float(str(valor).replace(",", "."))))
+    except (TypeError, ValueError):
+        return None
+
+
+def ler_linhas_predios(arquivo, seats_summary: dict) -> list[dict]:
+    """
+    Linhas das abas de cada prédio (BF4, CJL2, C_Marechal3...): andar, cliente, Total Seats
+    e Res/Avai de cada mês, exatamente como estão no arquivo.
+
+    Cada aba pode ter mais de uma tabela (BF4: Tower A e Tower B) e, embaixo, cenários de
+    planejamento (C_Marechal3). Lemos as tabelas até a soma dos seats bater com o Total
+    Seats do prédio na aba Summary; sem Summary, só a primeira tabela.
+    """
+    if hasattr(arquivo, "seek"):
+        arquivo.seek(0)
+    try:
+        livro = load_workbook(arquivo, read_only=True, data_only=True)
+    except Exception:
+        return []
+    linhas = []
+    try:
+        for aba in livro.worksheets:
+            location_id = ABAS_PREDIOS.get(aba.title.lower().replace(" ", "").replace("_", ""))
+            if not location_id or aba.sheet_state != "visible":
+                continue
+            linhas += _tabelas_do_predio(aba, location_id, seats_summary.get(location_id))
+    finally:
+        livro.close()
+    return linhas
+
+
+def _tabelas_do_predio(aba, location_id, total_predio):
+    linhas, anterior, colunas_mes, na_tabela, somado, ordem = [], None, None, False, 0, 0
+    for valores in aba.iter_rows(max_col=60, values_only=True):
+        valores = list(valores) + [None] * (60 - len(valores))
+        if str(valores[4] or "").strip().lower() == "total seats":
+            # cabeçalho: os meses estão nesta linha ou na de cima (Nov, Dec, Jan...)
+            # (a 2ª tabela, ex.: Tower B, às vezes não repete os meses: usa os da anterior)
+            colunas_mes = (_meses_do_cabecalho(valores) or _meses_do_cabecalho(anterior or [])
+                           or colunas_mes)
+            na_tabela = bool(colunas_mes)
+        elif na_tabela:
+            andar, descricao = valores[1], valores[2]
+            if andar in (None, "") and descricao in (None, ""):       # linha de total: fim da tabela
+                na_tabela = False
+                if total_predio is None or somado >= total_predio:
+                    break
+            else:
+                seats = _numero(valores[4]) or 0
+                somado += seats
+                ordem += 1
+                linhas.append({
+                    "location_id": location_id, "ordem": ordem,
+                    "chave": str(valores[0] or "").strip(), "andar": str(andar or "").strip(),
+                    "descricao": str(descricao or "").strip(), "seats": seats,
+                    "meses": {mes: [_numero(valores[i]), _numero(valores[i + 1])]
+                              for mes, i in colunas_mes.items()},
+                })
+        anterior = valores
+    return linhas
+
+
+def _meses_do_cabecalho(valores) -> dict:
+    """{'2026-11': coluna do Res, ...} a partir dos nomes Nov, Dec, Jan... (Res e Avai ao lado)."""
+    nomes = [(i, str(v).strip()[:3].title()) for i, v in enumerate(valores)
+             if i >= 5 and str(v or "").strip()[:3].title() in meses.NOMES]
+    # só o bloco que começa logo depois do Total Seats (coluna F) e anda de 2 em 2
+    # (Res, Avai); mais à direita a aba tem outro bloco de meses (base da conta)
+    if not nomes or nomes[0][0] > 6:
+        return {}
+    seguidos = [nomes[0]]
+    for i, nome in nomes[1:]:
+        if i != seguidos[-1][0] + 2 or len(seguidos) == 12:
+            break
+        seguidos.append((i, nome))
+    nomes = seguidos
+    # o 1º mês do arquivo é o mês da janela com o mesmo nome (a partir do mês atual)
+    janela = meses.janela(meses.atual().somar(-2), 16)
+    atual = next((m for m in janela if meses.NOMES[m.mes - 1] == nomes[0][1]), janela[2])
+    return {atual.somar(k).chave: i for k, (i, _nome) in enumerate(nomes)}
+
+
 def _limpar(mapa, valores_por_linha, primeira: int, somente_pais, origem="Linha"):
     """Transforma cada linha bruta num dict limpo; linhas com problema viram aviso."""
     linhas, avisos = [], []

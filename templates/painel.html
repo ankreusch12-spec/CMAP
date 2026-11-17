@@ -3,11 +3,11 @@
 {% block conteudo %}
 <h1>Painel de ocupação</h1>
 <p class="ajuda">
-  Por prédio, mês a mês: o reservado no CMAP de cada <b>carteira sua</b>
-  (status Confirmado e Fila mensal). O <b>disponível</b> e a <b>ocupação</b> são do prédio inteiro
-  (Total Seats menos tudo o que está reservado nele).
-  <b>Total Seats</b> vem do arquivo BRA_Distribution_Capacity (aba Summary).
-  Em vermelho: reservado acima dos seats.
+  Igual às abas de cada prédio do <b>BRA_Distribution_Capacity</b> (último importado), só com as linhas
+  das <b>suas carteiras</b>: andar, cliente, <b>Total Seats</b>, <b>Res</b> e <b>Avai</b> mês a mês.
+  Andares compartilhados aparecem como no arquivo. Quando há receptivo (projeto RCV ou digitado na
+  Reserva), a linha mostra embaixo a parte <i>outbound</i> e a de <i>receptivo</i>.
+  Em vermelho: Avai negativo (reservado acima dos seats).
 </p>
 
 {% set faltam = passos|rejectattr(0)|list %}
@@ -28,45 +28,62 @@
 </section>
 {% endif %}
 
-{% macro linhas_total(lista, rotulo) %}
-  <tr class="total-local"><td class="fixa">Total suas carteiras{{ rotulo }}</td>{% for x in lista %}<td class="num">{{ x.minhas }}</td>{% endfor %}</tr>
-  <tr><td class="fixa">Total Seats (arquivo)</td>{% for x in lista %}<td class="num">{{ x.seats or '—' }}</td>{% endfor %}</tr>
-  <tr><td class="fixa">Disponível no prédio</td>{% for x in lista %}<td class="num {{ 'negativo' if x.disp is not none and x.disp < 0 }}">{{ '—' if x.disp is none else x.disp }}</td>{% endfor %}</tr>
-  <tr class="linha-pct"><td class="fixa">Ocupação do prédio</td>{% for x in lista %}<td class="num pct">{{ '—' if x.pct is none else '{:.0%}'.format(x.pct) }}</td>{% endfor %}</tr>
+{% macro celulas(res, avai) %}
+  {% for i in range(res|length) %}
+    <td class="num">{{ '—' if res[i] is none else res[i] }}</td>
+    <td class="num avai {{ 'negativo' if avai[i] is not none and avai[i] < 0 }}">{{ '—' if avai[i] is none else avai[i] }}</td>
+  {% endfor %}
 {% endmacro %}
 
-{% if not grupos %}
-  <div class="vazio">Nenhum local acompanhado. Confira <a href="{{ url_for('locais') }}">Locais</a>.</div>
+{% if not tem_linhas %}
+  <div class="vazio">Importe a planilha <b>BRA_Distribution_Capacity</b> em
+    <a href="{{ url_for('importar') }}">Importar → 2</a>: o Painel mostra as abas de cada prédio
+    (Total Seats, Res e Avai) só com as suas carteiras.</div>
+{% elif not grupos %}
+  <div class="vazio">Nenhuma linha das suas carteiras nos prédios acompanhados.</div>
 {% else %}
 <div class="rolagem">
-<table class="grade painel painel-carteiras">
+<table class="grade painel painel-arquivo">
   <thead>
-    <tr><th class="fixa">Local / carteira</th>{% for m in janela %}<th class="num">{{ m.rotulo }}</th>{% endfor %}</tr>
+    <tr>
+      <th class="fixa" rowspan="2">Andar · Cliente</th><th rowspan="2" class="num">Total Seats</th>
+      {% for m in janela %}<th colspan="2" class="mes">{{ m.rotulo }}</th>{% endfor %}
+    </tr>
+    <tr>{% for m in janela %}<th class="num">Res</th><th class="num">Avai</th>{% endfor %}</tr>
   </thead>
   {% for g in grupos %}
   <tbody>
-    <tr class="cidade"><td class="fixa">{{ g.cidade|upper }}</td><td colspan="{{ janela|length }}"></td></tr>
+    <tr class="cidade"><td class="fixa">{{ g.cidade|upper }}</td><td colspan="{{ janela|length * 2 + 1 }}"></td></tr>
   </tbody>
   {% for l in g.locais %}
   <tbody class="bloco-local">
     <tr class="cab-local"><td class="fixa"><span class="codigo">{{ l.local.location_id }}</span> {{ l.local.descricao }}</td>
-      <td colspan="{{ janela|length }}" class="ajuda">Total Seats: {{ l.local.capacidade or 'sem número — importe o arquivo ou digite em Locais' }}</td></tr>
-    {% for c in l.carteiras %}
-    <tr><td class="fixa recuo">{{ c.nome }}</td>{% for r in c.res %}<td class="num">{{ r }}</td>{% endfor %}</tr>
-    {% else %}
-    <tr><td class="fixa recuo ajuda">nenhuma carteira sua reservada aqui</td><td colspan="{{ janela|length }}"></td></tr>
+      <td colspan="{{ janela|length * 2 + 1 }}" class="ajuda">Total Seats do prédio: {{ l.local.capacidade or '—' }}</td></tr>
+    {% for x in l.linhas %}
+    <tr>
+      <td class="fixa recuo"><span class="andar">{{ x.andar }}</span> {{ x.descricao }}</td>
+      <td class="num"><b>{{ x.seats }}</b></td>
+      {{ celulas(x.res, x.avai) }}
+    </tr>
+    {% if x.receptivo %}
+    <tr class="sub"><td class="fixa recuo2">↳ outbound</td><td></td>
+      {% for v in x.outbound %}<td class="num">{{ v }}</td><td></td>{% endfor %}</tr>
+    <tr class="sub"><td class="fixa recuo2">↳ receptivo</td><td></td>
+      {% for v in x.receptivo %}<td class="num">{{ v }}</td><td></td>{% endfor %}</tr>
+    {% endif %}
     {% endfor %}
-    {{ linhas_total(l.meses, '') }}
+    <tr class="total-local"><td class="fixa">Total suas carteiras</td><td class="num">{{ l.total.seats }}</td>
+      {{ celulas(l.total.res, l.total.avai) }}</tr>
   </tbody>
   {% endfor %}
   <tbody class="bloco-total">
-    <tr class="cidade"><td class="fixa">TOTAL {{ g.cidade|upper }}</td><td colspan="{{ janela|length }}"></td></tr>
-    {{ linhas_total(g.total, '') }}
+    <tr><td class="fixa">TOTAL {{ g.cidade|upper }}</td><td class="num">{{ g.total.seats }}</td>
+      {{ celulas(g.total.res, g.total.avai) }}</tr>
   </tbody>
   {% endfor %}
   <tbody class="bloco-total">
-    <tr class="cidade"><td class="fixa">TOTAL GERAL</td><td colspan="{{ janela|length }}"></td></tr>
-    {{ linhas_total(totais, '') }}
+    <tr><td class="fixa">TOTAL GERAL</td><td class="num">{{ totais.seats }}</td>
+      {{ celulas(totais.res, totais.avai) }}</tr>
   </tbody>
 </table>
 </div>

@@ -257,3 +257,12 @@ details.incluir:not([open]) { border: 0; padding: 0; }
 .comparacao tr.linha-receptivo td { background: var(--atencao); }
 .comparacao tr.linha-receptivo input.qtd { width: 56px; }
 .acoes-receptivo { display: flex; gap: 4px; margin-top: 4px; }
+
+/* Painel no formato das abas do arquivo */
+.painel-arquivo th.mes { text-align: center; border-left: 1px solid var(--borda); }
+.painel-arquivo td.avai { color: var(--suave); border-right: 1px solid var(--borda); }
+.painel-arquivo td.avai.negativo { color: var(--negativo-texto); }
+.painel-arquivo .andar { display: inline-block; min-width: 72px; color: var(--suave); font-size: 12px; }
+.painel-arquivo td.recuo2 { padding-left: 100px; color: var(--suave); font-size: 12px; }
+.painel-arquivo tr.sub td { font-size: 12px; color: var(--suave); padding-top: 1px; padding-bottom: 1px; }
+.painel-arquivo tr.total-local td { font-weight: 700; border-top: 1px solid var(--borda); }

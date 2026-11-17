@@ -101,8 +101,10 @@ def registrar_rotas(app: Flask):
     @app.get("/")
     def painel():
         janela = meses.janela()
-        grupos, totais = banco.ocupacao(janela)
+        grupos, totais = banco.painel_arquivo(janela)
         return render_template("painel.html", janela=janela, grupos=grupos, totais=totais,
+                               tem_linhas=bool(banco.db().execute(
+                                   "SELECT 1 FROM predios_arquivo LIMIT 1").fetchone()),
                                passos=primeiros_passos())
 
     # ------------------------------------------------------------ LOCAIS (de-para)
@@ -289,6 +291,18 @@ def registrar_rotas(app: Flask):
             banco.registrar("Total Seats do arquivo", ", ".join(f"{k} {v}" for k, v in seats.items()))
             con.commit()
             flash(f"Total Seats atualizado pelo arquivo em {len(seats)} prédio(s).", "ok")
+        # Linhas das abas de cada prédio (andar, cliente, seats, Res/Avai) para o Painel
+        linhas_predios = planilhas.ler_linhas_predios(arquivo.stream, seats)
+        if linhas_predios:
+            import json
+            con = banco.db()
+            con.execute("DELETE FROM predios_arquivo")
+            con.executemany("""INSERT INTO predios_arquivo (location_id, ordem, chave, andar, descricao,
+                                   seats, meses) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                            [(l["location_id"], l["ordem"], l["chave"], l["andar"], l["descricao"],
+                              l["seats"], json.dumps(l["meses"])) for l in linhas_predios])
+            banco.registrar("Linhas dos prédios do arquivo", f"{len(linhas_predios)} linhas")
+            con.commit()
         for aviso in avisos[:10]:
             flash(aviso, "erro")
         return redirect(url_for("reservas"))
