@@ -25,11 +25,16 @@ REGRAS (combinadas com a Anna em 11/11/2026; maior turno em 17/11/2026):
 import math
 import re
 import unicodedata
+import warnings
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
 from openpyxl import load_workbook
+
+# Avisos técnicos do openpyxl ("Data Validation extension is not supported"...) não são
+# erros: o Excel do forecast usa recursos que a leitura simplesmente ignora.
+warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 import meses
 
@@ -128,8 +133,8 @@ def ler(arquivo):
     try:
         livro = load_workbook(arquivo, read_only=True, data_only=True)
     except PermissionError as erro:
-        raise ErroForecast("O forecast está aberto no Excel (o Windows bloqueia a leitura). "
-                           "Feche o arquivo e atualize a página.") from erro
+        raise ErroForecast("O forecast está bloqueado — aberto no Excel ou o OneDrive está "
+                           "sincronizando. Espere o ícone ficar verde (✓) e atualize a página.") from erro
     except Exception as erro:
         raise ErroForecast("Não consegui abrir o arquivo. Ele é um .xlsx válido?") from erro
     try:
@@ -208,29 +213,58 @@ def ler_caminhos(arquivo: Path) -> dict:
     return caminhos
 
 
-def _parece_forecast(arquivo: Path) -> bool:
-    """Olha só o cabeçalho (rápido): tem LOB WFM, DADO e ENDEREÇO INTEGRATION?"""
+def motivo_para_nao_ler(arquivo: Path) -> str | None:
+    """
+    Abre só o cabeçalho (rápido). Devolve None se é um forecast que dá para ler,
+    ou o motivo em português de não conseguir.
+    """
     try:
         livro = load_workbook(arquivo, read_only=True, data_only=True)
-        try:
-            _achar_cabecalho(livro)
-            return True
-        finally:
-            livro.close()
+    except PermissionError:
+        return ("está bloqueado — aberto no Excel ou o OneDrive está sincronizando. "
+                "Espere o ícone ficar verde (✓) ou feche o arquivo")
+    except OSError:
+        return ("o OneDrive não deixou ler — talvez só exista na nuvem. Botão direito no arquivo > "
+                "“Sempre manter neste dispositivo”")
     except Exception:
-        return False
+        return "não é um Excel (.xlsx) que eu consiga abrir"
+    try:
+        _achar_cabecalho(livro)
+        return None
+    except ErroForecast:
+        return "não tem as colunas do forecast (LOB WFM, DADO e ENDEREÇO INTEGRATION)"
+    finally:
+        livro.close()
+
+
+def diagnosticar(caminho: str):
+    """
+    Procura o forecast no caminho (arquivo ou pasta) e explica o que achou.
+    Devolve (arquivo ou None, lista de motivos para mostrar ao usuário).
+    """
+    alvo = Path(str(caminho).strip().strip('"')).expanduser()
+    if alvo.is_file():
+        motivo = motivo_para_nao_ler(alvo)
+        return (None, [f"{alvo.name}: {motivo}."]) if motivo else (alvo, [])
+    if alvo.is_dir():
+        # primeiro os que têm "forecast" no nome; depois os mais recentes
+        candidatos = sorted((p for p in alvo.glob("*.xlsx") if not p.name.startswith("~$")),
+                            key=lambda p: ("forecast" not in normalizar(p.name), -p.stat().st_mtime))
+        motivos = []
+        for arq in candidatos:
+            motivo = motivo_para_nao_ler(arq)
+            if not motivo:
+                return arq, []
+            motivos.append(f"{arq.name}: {motivo}.")
+        return None, motivos or ["a pasta não tem nenhum arquivo .xlsx."]
+    dica = (" Se aparece “...” no meio, pode ser abreviação do Windows: use Copiar como caminho."
+            if "..." in str(alvo) and not alvo.parent.exists() else "")
+    return None, [f"esse caminho não existe neste computador.{dica}"]
 
 
 def achar_arquivo(caminho: str) -> Path | None:
     """O arquivo informado, ou o forecast salvo por último dentro da pasta informada."""
-    alvo = Path(caminho).expanduser()
-    if alvo.is_file():
-        return alvo
-    if alvo.is_dir():
-        candidatos = sorted((p for p in alvo.glob("*.xlsx") if not p.name.startswith("~$")),
-                            key=lambda p: p.stat().st_mtime, reverse=True)
-        return next((p for p in candidatos if _parece_forecast(p)), None)
-    return None
+    return diagnosticar(caminho)[0]
 
 
 # ================================================================ CALCULAR

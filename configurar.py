@@ -26,12 +26,20 @@ def perguntar_forecast(atual: str) -> str:
         resposta = input(f"   Caminho [{atual or 'nenhum'}]: ").strip().strip('"').strip()
         if not resposta:
             return atual
-        achado = forecast.achar_arquivo(resposta)
+        print("   Procurando o forecast...")
+        achado, motivos = forecast.diagnosticar(resposta)
         if achado:
             print(f"   OK! Forecast encontrado: {achado.name}")
             return resposta
-        print("   Não achei um forecast nesse caminho (arquivo .xlsx com as colunas LOB WFM e DADO).")
-        print("   Confira e cole de novo, ou tecle Enter para pular por enquanto.")
+        print("   Não consegui ler o forecast agora:")
+        for motivo in motivos[:8]:
+            print(f"     - {motivo}")
+        if Path(resposta).exists():
+            # O caminho existe: pode ser só o arquivo aberto/sincronizando agora.
+            # O controle confere de novo toda vez que abre.
+            if input("   O caminho existe. Salvar mesmo assim? [S/n]: ").strip().lower() in ("", "s", "sim"):
+                return resposta
+        print("   Cole de novo, ou tecle Enter para pular por enquanto.")
 
 
 def salvar(nome: str, caminho: str):

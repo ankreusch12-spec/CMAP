@@ -10,6 +10,9 @@ echo ============================================================
 echo  Controle CMAP - instalacao
 echo ============================================================
 echo.
+rem --- 0) Nao pode rodar de dentro do ZIP (o Windows usa uma pasta temporaria) ---
+echo "%~dp0" | find /i "\AppData\Local\Temp\" >nul && goto dentro_do_zip
+
 
 rem --- 1) Procura o Python -------------------------------------------
 set "PY="
@@ -53,6 +56,17 @@ echo  Tudo certo! Para usar, de dois cliques em abrir_controle.bat
 echo ============================================================
 pause
 exit /b 0
+
+:dentro_do_zip
+echo [ATENCAO] Voce abriu o instalar.bat de DENTRO do ZIP.
+echo O Windows colocou os arquivos numa pasta temporaria, que pode ser apagada.
+echo.
+echo Feche esta janela e faca assim:
+echo   1. Botao direito no "Controle CMAP.zip" ^> Extrair tudo...
+echo   2. Escolha uma pasta fixa, por exemplo Documentos
+echo   3. Abra a pasta extraida e de dois cliques no instalar.bat
+pause
+exit /b 1
 
 :sem_python
 echo [ERRO] Nao achei o Python neste computador.

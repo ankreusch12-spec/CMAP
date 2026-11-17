@@ -249,3 +249,18 @@ def test_configurar_cria_caminhos(tmp_path, monkeypatch):
     configurar.main()
     lido = forecast.ler_caminhos(tmp_path / "caminhos.txt")
     assert lido == {"usuario": "Fulana de Tal", "forecast": str(pasta)}
+
+
+def test_diagnostico_explica_por_que_nao_leu(tmp_path):
+    pasta = tmp_path / "...WORKDAY"                      # nome de pasta com pontos, como no OneDrive
+    pasta.mkdir()
+    Workbook().save(pasta / "Acompanhamento de Requisição.xlsx")
+    (pasta / "quebrado.xlsx").write_text("não é excel")
+    achado, motivos = forecast.diagnosticar(str(pasta))
+    assert achado is None
+    assert any("não tem as colunas do forecast" in m for m in motivos)
+    assert any("não é um Excel" in m for m in motivos)
+    forecast_ficticio(pasta / "_FORECAST_OFICIAL_2025_-_OUTBOUND NOVO.xlsx")
+    achado, _ = forecast.diagnosticar(f'"{pasta}"')       # aceita o caminho com aspas
+    assert achado.name.startswith("_FORECAST_OFICIAL")
+    assert "não existe" in forecast.diagnosticar(str(tmp_path / "nada"))[1][0]

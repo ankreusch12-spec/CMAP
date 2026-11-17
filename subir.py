@@ -58,10 +58,10 @@ def sincronizar(forcar: bool = False):
     caminho = current_app.config.get("FORECAST_CAMINHO")
     if not caminho:
         return None
-    arquivo = forecast.achar_arquivo(caminho)
+    arquivo, motivos = forecast.diagnosticar(caminho)
     if not arquivo:
-        return (f"Não achei o forecast em “{caminho}” (caminhos.txt). Confira o caminho; "
-                "até lá, vale o último forecast importado.", "erro")
+        return (f"Não achei o forecast em “{caminho}” (caminhos.txt): " + " ".join(motivos[:3])
+                + " Até lá, vale o último forecast importado.", "erro")
     modificado = datetime.fromtimestamp(arquivo.stat().st_mtime)
     marca = f"{arquivo.resolve()}|{arquivo.stat().st_mtime_ns}"
     info = info_forecast()
