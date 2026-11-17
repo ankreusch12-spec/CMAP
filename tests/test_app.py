@@ -18,7 +18,7 @@ from app import criar_app  # noqa: E402
 
 @pytest.fixture
 def app(tmp_path):
-    return criar_app({"TESTING": True, "BANCO": str(tmp_path / "teste.db"), "USUARIO": "Teste"})
+    return criar_app({"TESTING": True, "CADASTRAR_LOCAIS": False, "BANCO": str(tmp_path / "teste.db"), "USUARIO": "Teste"})
 
 
 @pytest.fixture
@@ -202,7 +202,67 @@ def test_banco_antigo_ganha_coluna_ativo(tmp_path):
                     [("BR-PON-RUASE", "Ponta Grossa"), ("BR-CEA-LEDOS", "Fortaleza")])
     con.commit()
     con.close()
-    app = criar_app({"TESTING": True, "BANCO": str(caminho)})
+    app = criar_app({"TESTING": True, "CADASTRAR_LOCAIS": False, "BANCO": str(caminho)})
     with app.app_context():
         assert {l["location_id"]: l["ativo"] for l in banco.locais()} == \
             {"BR-PON-RUASE": 1, "BR-CEA-LEDOS": 0}
+
+
+def test_locais_do_cmap_ja_vem_cadastrados(tmp_path):
+    app = criar_app({"TESTING": True, "BANCO": str(tmp_path / "novo.db")})
+    with app.app_context():
+        ativos = {l["location_id"] for l in banco.locais(somente_ativos=True)}
+        assert ativos == banco.MEUS_LOCAIS
+        assert len(banco.locais()) == len(banco.LOCAIS_CMAP)
+        # o que você editou não é sobrescrito quando o controle abre de novo
+        banco.db().execute("UPDATE locais SET capacidade = 123 WHERE location_id = 'BR-PON-RUASE'")
+        banco.db().commit()
+    app2 = criar_app({"TESTING": True, "BANCO": str(tmp_path / "novo.db")})
+    with app2.app_context():
+        assert {l["location_id"]: l["capacidade"] for l in banco.locais()}["BR-PON-RUASE"] == 123
+
+
+def _xlsx_com_tabela_dinamica(caminho, registros):
+    """Excel com uma tabela dinâmica cujo cache tem as colunas do relatório do CMAP."""
+    import zipfile
+    Workbook().save(caminho)
+    ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' \
+         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+    campos = ["Country", "Location ID", "Site", "Client", "Project ID", "Project", "Dept",
+              "Shift", "Eff Date", "Qty"]
+    definicao = (f'<pivotCacheDefinition {ns} r:id="rId1"><cacheFields count="{len(campos) + 1}">'
+                 + "".join(f'<cacheField name="{c}"><sharedItems/></cacheField>' for c in campos[:-2])
+                 + '<cacheField name="Eff Date"><sharedItems><d v="2026-11-01T00:00:00"/>'
+                   '<d v="2026-12-01T00:00:00"/></sharedItems></cacheField>'
+                 + '<cacheField name="Qty"><sharedItems/></cacheField>'
+                 + '<cacheField name="Months" databaseField="0"><sharedItems/></cacheField>'
+                 + '</cacheFields></pivotCacheDefinition>')
+    rels = ('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="x" Target="pivotCacheRecords1.xml"/></Relationships>')
+    linhas = "".join("<r>" + "".join(f'<s v="{v}"/>' for v in r[:-2]) + f'<x v="{r[-2]}"/><n v="{r[-1]}"/></r>'
+                     for r in registros)
+    with zipfile.ZipFile(caminho, "a") as z:
+        z.writestr("xl/pivotCache/pivotCacheDefinition1.xml", definicao)
+        z.writestr("xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels", rels)
+        z.writestr("xl/pivotCache/pivotCacheRecords1.xml", f"<pivotCacheRecords {ns}>{linhas}</pivotCacheRecords>")
+
+
+def test_importa_da_tabela_dinamica_da_planilha_de_capacidade(cliente, app, tmp_path):
+    caminho = tmp_path / "BRA_Distribution_Capacity.xlsx"
+    _xlsx_com_tabela_dinamica(caminho, [
+        ["Brazil", "BR-PON-RUASE", "Ponta Grossa", "CLIENTE_A", "EXEMPLO001", "P_A", "PRODUCAGENT-DIR", "DED", 0, 25],
+        ["Brazil", "BR-PON-RUASE", "Ponta Grossa", "CLIENTE_A", "EXEMPLO001", "P_A", "PRODUCAGENT-DIR", "DED", 1, 30],
+        ["Brazil", "BR-WFH-DRECT", "WAH", "CLIENTE_A", "EXEMPLO001", "P_A", "PRODUCAGENT-DIR", "DED", 0, 7],
+        ["Mexico", "MX-XXX", "Outro", "CLIENTE_B", "EXEMPLO002", "P_B", "PRODUCAGENT-DIR", "DED", 0, 99],
+    ])
+    t = token(cliente, "/importar")
+    with caminho.open("rb") as f:
+        r = cliente.post("/importar", data={"csrf_token": t, "arquivo": (f, caminho.name)},
+                         content_type="multipart/form-data", follow_redirects=True)
+    assert "2 reservas novas" in r.get_data(as_text=True)
+    with app.app_context():
+        locais = {x["location_id"] for x in banco.reservas()}
+        assert locais == {"BR-PON-RUASE", "BR-WFH-DIRETO"}          # DRECT virou DIRETO
+        pg = next(x for x in banco.reservas() if x["location_id"] == "BR-PON-RUASE")
+        qtd = banco.grade_assentos(pg["id"], [meses.Mes(2026, 11), meses.Mes(2026, 12)])[0]["qtd"]
+        assert qtd == {"2026-11": 25, "2026-12": 30}

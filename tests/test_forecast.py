@@ -49,7 +49,7 @@ def forecast_ficticio(caminho):
 
 @pytest.fixture
 def app(tmp_path):
-    return criar_app({"TESTING": True, "BANCO": str(tmp_path / "t.db"), "USUARIO": "Teste"})
+    return criar_app({"TESTING": True, "CADASTRAR_LOCAIS": False, "BANCO": str(tmp_path / "t.db"), "USUARIO": "Teste"})
 
 
 @pytest.fixture
@@ -215,7 +215,7 @@ def test_forecast_ligado_ao_arquivo(tmp_path):
     (tmp_path / "caminhos.txt").write_text(f"# comentário\nforecast = \"{pasta}\"\n", encoding="utf-8")
     assert forecast.ler_caminhos(tmp_path / "caminhos.txt")["forecast"] == str(pasta)
 
-    app = criar_app({"TESTING": True, "BANCO": str(tmp_path / "t.db"), "FORECAST_CAMINHO": str(pasta)})
+    app = criar_app({"TESTING": True, "CADASTRAR_LOCAIS": False, "BANCO": str(tmp_path / "t.db"), "FORECAST_CAMINHO": str(pasta)})
     c = app.test_client()
 
     def importacoes():

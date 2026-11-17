@@ -20,6 +20,7 @@ from openpyxl.utils import get_column_letter
 
 import banco
 import meses
+import tabela_dinamica
 
 # Nome "bonito" de cada Dept Code, como aparece na aba Assentos do CMAP.
 NOMES_DEPT = {
@@ -36,6 +37,7 @@ COLUNAS = {
     "resv desc": "resv_desc", "status": "status",
 }
 OBRIGATORIAS = {"location_id", "project_id", "dept", "eff_date", "qty"}
+OBRIGATORIAS_NOMES = {"location id", "project id", "dept", "eff date", "qty"}
 
 
 class ErroPlanilha(Exception):
@@ -56,8 +58,14 @@ def _achar_cabecalho(aba):
 
 def ler(arquivo, somente_pais: str | None = "Brazil"):
     """
-    Lê o Excel e devolve uma lista de linhas (dicts) já limpas.
+    Lê o Excel e devolve (linhas, avisos), com as linhas (dicts) já limpas.
     `arquivo` pode ser um caminho ou um arquivo aberto.
+
+    Procura os dados em dois lugares:
+      1. numa aba com as colunas do relatório do CMAP (Location ID, Project ID...);
+      2. dentro de uma TABELA DINÂMICA que tenha essas colunas — é o caso da planilha
+         BRA_Distribution_Capacity: a aba "12 month forecast" guarda o relatório do
+         CMAP inteiro no cache da tabela dinâmica.
     """
     try:
         # read_only: leitura rápida e segura; data_only: valores, não fórmulas.
@@ -68,51 +76,65 @@ def ler(arquivo, somente_pais: str | None = "Brazil"):
     try:
         for aba in livro.worksheets:
             n_cab, mapa = _achar_cabecalho(aba)
-            if not mapa:
-                continue
-            linhas, avisos = [], []
-            for n, valores in enumerate(aba.iter_rows(min_row=n_cab + 1, values_only=True),
-                                        start=n_cab + 1):
-                def campo(nome, padrao=""):
-                    i = mapa.get(nome)
-                    v = valores[i] if i is not None and i < len(valores) else None
-                    return padrao if v is None else v
-
-                if not campo("location_id") or not campo("project_id"):
-                    continue                                   # linha vazia
-                if somente_pais and "pais" in mapa and str(campo("pais")).strip() != somente_pais:
-                    continue
-                try:
-                    mes = meses.de_valor(campo("eff_date"))
-                    qtd = int(campo("qty", 0))
-                    if qtd < 0:
-                        raise ValueError
-                except (ValueError, IndexError):
-                    avisos.append(f"Linha {n}: data ou quantidade inválida — ignorada.")
-                    continue
-                dept = str(campo("dept")).strip().upper()
-                linhas.append({
-                    "location_id": str(campo("location_id")).strip(),
-                    "site_id": str(campo("site_id")).strip(),
-                    "site": str(campo("site")).strip(),
-                    "cliente": str(campo("cliente")).strip(),
-                    "project_id": str(campo("project_id")).strip(),
-                    "project": str(campo("project")).strip(),
-                    "dept": dept,
-                    "dept_name": str(campo("dept_name")).strip() or NOMES_DEPT.get(dept, ""),
-                    "shift": str(campo("shift", "DED")).strip().upper() or "DED",
-                    "resv_desc": str(campo("resv_desc")).strip(),
-                    "status": str(campo("status")).strip(),
-                    "mes": mes.chave,
-                    "qtd": qtd,
-                })
-            return linhas, avisos
+            if mapa:
+                return _limpar(mapa, aba.iter_rows(min_row=n_cab + 1, values_only=True),
+                               n_cab + 1, somente_pais)
     finally:
         livro.close()
 
+    if hasattr(arquivo, "seek"):
+        arquivo.seek(0)
+    achado = tabela_dinamica.ler(arquivo, OBRIGATORIAS_NOMES)
+    if achado:
+        nomes, registros = achado
+        mapa = {COLUNAS[n.strip().lower()]: i for i, n in enumerate(nomes)
+                if n.strip().lower() in COLUNAS}
+        return _limpar(mapa, registros, 1, somente_pais, origem="registro")
+
     raise ErroPlanilha(
         "Não encontrei as colunas do CMAP (Location ID, Project ID, Dept, Eff Date, Qty). "
-        "Use o relatório exportado do CMAP ou um arquivo exportado por este controle.")
+        "Use o relatório exportado do CMAP, a planilha BRA_Distribution_Capacity "
+        "ou um arquivo exportado por este controle.")
+
+
+def _limpar(mapa, valores_por_linha, primeira: int, somente_pais, origem="Linha"):
+    """Transforma cada linha bruta num dict limpo; linhas com problema viram aviso."""
+    linhas, avisos = [], []
+    for n, valores in enumerate(valores_por_linha, start=primeira):
+        def campo(nome, padrao=""):
+            i = mapa.get(nome)
+            v = valores[i] if i is not None and i < len(valores) else None
+            return padrao if v is None else v
+
+        if not campo("location_id") or not campo("project_id"):
+            continue                                   # linha vazia
+        if somente_pais and "pais" in mapa and str(campo("pais")).strip() != somente_pais:
+            continue
+        try:
+            mes = meses.de_valor(campo("eff_date"))
+            qtd = int(float(campo("qty", 0)))
+            if qtd < 0:
+                raise ValueError
+        except (ValueError, IndexError, TypeError):
+            avisos.append(f"{origem.capitalize()} {n}: data ou quantidade inválida — ignorado.")
+            continue
+        dept = str(campo("dept")).strip().upper()
+        linhas.append({
+            "location_id": banco.codigo_local(campo("location_id")),
+            "site_id": str(campo("site_id")).strip(),
+            "site": str(campo("site")).strip(),
+            "cliente": str(campo("cliente")).strip(),
+            "project_id": str(campo("project_id")).strip(),
+            "project": str(campo("project")).strip(),
+            "dept": dept,
+            "dept_name": str(campo("dept_name")).strip() or NOMES_DEPT.get(dept, ""),
+            "shift": str(campo("shift", "DED")).strip().upper() or "DED",
+            "resv_desc": str(campo("resv_desc")).strip(),
+            "status": str(campo("status")).strip(),
+            "mes": mes.chave,
+            "qtd": qtd,
+        })
+    return linhas, avisos
 
 
 def gravar(linhas, usuario: str):

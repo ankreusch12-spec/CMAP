@@ -73,8 +73,11 @@ Se estiver aberto no Excel ou o caminho estiver errado, aparece um aviso e vale 
 
 ### Primeira vez com dados reais
 
+O **Painel** mostra o quadro **Primeiros passos** com o que já foi feito e o que falta.
+
 1. **Locais**: digite a capacidade real de cada prédio.
-2. **Importar → Relatório do CMAP**: o que já está reservado (sem ele, “Disponíveis” fica zerado).
+2. **Importar → 2. O que já está no CMAP**: envie a planilha **BRA_Distribution_Capacity** (o controle lê o
+   relatório do CMAP guardado na tabela dinâmica da aba *12 month forecast*). Sem isso, “Disponíveis” fica zerado.
 3. **Frentes**: “Preencher MAS vazios” com o controle antigo e digite os MAS que faltarem.
 4. Confira **O que subir** e **Gestores**.
 

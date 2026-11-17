@@ -8,6 +8,24 @@
   Em vermelho: reservado acima da capacidade. Só aparecem os locais que você acompanha.
 </p>
 
+{% set faltam = passos|rejectattr(0)|list %}
+{% if faltam %}
+<section class="cartao passos">
+  <h2>Primeiros passos <span class="ajuda">({{ passos|length - faltam|length }} de {{ passos|length }} feitos)</span></h2>
+  <ol>
+    {% for feito, titulo, detalhe, link, rotulo in passos %}
+    <li class="{{ 'feito' if feito }}">
+      <span class="marca-passo">{{ '✔' if feito else loop.index }}</span>
+      <div><b>{{ titulo }}</b><br><span class="ajuda">{{ detalhe }}</span></div>
+      {% if not feito %}<a class="botao pequeno" href="{{ link }}">{{ rotulo }}</a>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  <p class="ajuda">Depois: <a href="{{ url_for('o_que_subir') }}">O que subir</a> mostra o que lançar no CMAP e
+    <a href="{{ url_for('visao_gestores') }}">Gestores</a> o resumo por gestor.</p>
+</section>
+{% endif %}
+
 {% if not grupos %}
   <div class="vazio">
     Nenhum local cadastrado ainda. Use <a href="{{ url_for('importar') }}">Importar</a>

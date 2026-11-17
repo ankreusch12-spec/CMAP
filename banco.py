@@ -38,6 +38,41 @@ MEUS_LOCAIS = {
     "BR-WFH-DIRETO",    # WAH Brasil Direto WFH (reservas _HO do home office)
 }
 
+# Locais do CMAP Brasil (tela "Disponibilidade de locais"): Location ID, Site ID, descrição.
+# Entram sozinhos na primeira vez que o controle abre; a capacidade você digita em Locais.
+LOCAIS_CMAP = [
+    ("BR-BAR-ARAGU", "BAA", "Barueri Araguaia"),
+    ("BR-CEA-LEDOS", "", "Fortaleza Gonçalves Ledo"),
+    ("BR-CUR-BARAO", "", "Curitiba Barão"),
+    ("BR-CUR-JOSEL-01", "CJ1", "Curitiba José Loureiro 1"),
+    ("BR-CUR-JOSEL-02", "CJ2", "Curitiba José Loureiro 2"),
+    ("BR-CUR-JOSEL-03", "", "Curitiba José Loureiro 3"),
+    ("BR-CUR-MALDE-01", "CM2", "Curitiba Marechal 2"),
+    ("BR-CUR-MALDE-02", "", "Curitiba Marechal 3"),
+    ("BR-CUR-MALDE-03", "", "Curitiba Tibagi"),
+    ("BR-CUR-MURIC", "", "Curitiba Muricy"),
+    ("BR-PON-RUASE", "BPG", "Ponta Grossa"),
+    ("BR-SAO-EZTOW", "", "Torre EZ de São Paulo"),
+    ("BR-SÃO-FRANÇA", "", "São Paulo Água Branca"),
+    ("BR-SAO-TAGIP", "", "São Paulo Barra Funda BF4 Tagipuru"),
+    ("BR-WFH-DIRETO", "BWD", "WAH Brasil Direto WFH"),
+    ("BR-WFH-INDIR", "", "Trabalho Remoto - Indireto"),
+]
+
+# Alguns relatórios do CMAP usam outro código para o mesmo local.
+# Código do relatório -> código da tela "Disponibilidade de locais".
+CODIGOS_IGUAIS = {
+    "BR-WFH-DRECT": "BR-WFH-DIRETO",
+    "BR-SAO-FRANC": "BR-SÃO-FRANÇA",
+}
+
+
+def codigo_local(location_id: str) -> str:
+    """Devolve o código usado no controle (troca os códigos alternativos)."""
+    codigo = str(location_id or "").strip()
+    return CODIGOS_IGUAIS.get(codigo.upper(), codigo)
+
+
 # Cidade de cada local, pelo pedaço do meio do código (BR-CUR-... = Curitiba).
 # A ordem aqui é a ordem dos grupos no painel.
 CIDADES = {"SAO": "São Paulo", "BAR": "São Paulo", "CUR": "Curitiba", "PON": "Ponta Grossa",
@@ -170,12 +205,21 @@ def iniciar(app):
     with conectar(app.config["BANCO"]) as con:
         con.executescript(ESQUEMA)
         atualizar_banco_antigo(con)
+        if app.config.get("CADASTRAR_LOCAIS", True):
+            cadastrar_locais_cmap(con)
 
     @app.teardown_appcontext
     def fechar(_erro=None):
         con = g.pop("db", None)
         if con is not None:
             con.close()
+
+
+def cadastrar_locais_cmap(con):
+    """Garante os locais do CMAP no banco. Não mexe nos que você já editou."""
+    con.executemany(
+        "INSERT OR IGNORE INTO locais (location_id, site_id, descricao, ativo) VALUES (?, ?, ?, ?)",
+        [(loc, site, desc, int(loc in MEUS_LOCAIS)) for loc, site, desc in LOCAIS_CMAP])
 
 
 def atualizar_banco_antigo(con):

@@ -90,7 +90,8 @@ def registrar_rotas(app: Flask):
     def painel():
         janela = meses.janela()
         grupos, totais = banco.ocupacao(janela)
-        return render_template("painel.html", janela=janela, grupos=grupos, totais=totais)
+        return render_template("painel.html", janela=janela, grupos=grupos, totais=totais,
+                               passos=primeiros_passos())
 
     # ------------------------------------------------------------ LOCAIS (de-para)
     @app.get("/locais")
@@ -429,6 +430,37 @@ def registrar_rotas(app: Flask):
 
 
 # ---------------------------------------------------------------- leitura de formulários
+
+def primeiros_passos():
+    """
+    Checklist da tela inicial: o que já foi feito e o que falta para o controle
+    ter números. Cada passo: (feito?, título, detalhe, link, texto do link).
+    """
+    con = banco.db()
+    info = subir.info_forecast()
+    n_reservas = con.execute("SELECT COUNT(*) FROM reservas").fetchone()[0]
+    frentes = con.execute("""SELECT COUNT(DISTINCT fr.lob), COUNT(DISTINCT CASE WHEN fr.project_id != ''
+                             THEN fr.lob END) FROM frentes fr JOIN forecast f ON f.lob = fr.lob""").fetchone()
+    predios = [l for l in banco.locais(somente_ativos=True) if l["location_id"] != forecast.LOCAL_HOME]
+    com_cap = sum(1 for l in predios if l["capacidade"])
+    return [
+        (bool(info), "Ler o forecast oficial",
+         f"Lido: {info['arquivo']} em {info['importado_em']}." if info else
+         "Configure o caminho no instalar.bat (caminhos.txt) ou envie o arquivo em Importar.",
+         url_for("importar"), "Importar"),
+        (n_reservas > 0, "Trazer o que já está no CMAP",
+         f"{n_reservas} reservas no controle." if n_reservas else
+         "Importe a planilha BRA_Distribution_Capacity (ou o relatório do CMAP) em Importar → 2.",
+         url_for("importar"), "Importar"),
+        (bool(frentes[0]) and frentes[0] == frentes[1], "Ligar cada frente ao MAS",
+         f"{frentes[1]} de {frentes[0]} frentes com MAS. Use “Preencher MAS vazios” com o controle antigo."
+         if frentes[0] else "Aparece depois de ler o forecast.",
+         url_for("frentes"), "Frentes"),
+        (bool(predios) and com_cap == len(predios), "Digitar a capacidade dos prédios",
+         f"{com_cap} de {len(predios)} prédios com capacidade (Prod + TL).",
+         url_for("locais"), "Locais"),
+    ]
+
 
 def avisar_forecast(forcar: bool = False):
     """Lê o forecast do caminhos.txt se ele mudou, e mostra o resultado na tela."""

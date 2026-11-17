@@ -86,10 +86,9 @@ def carregar():
     app = criar_app()
     with app.app_context():
         con = banco.db()
-        con.executemany("""INSERT OR IGNORE INTO locais
-                           (location_id, site_id, descricao, capacidade, ativo)
-                           VALUES (?, ?, ?, ?, ?)""",
-                        [(*l, int(l[0] in banco.MEUS_LOCAIS)) for l in LOCAIS])
+        # os locais já vêm cadastrados (banco.LOCAIS_CMAP); aqui só a capacidade fictícia
+        con.executemany("UPDATE locais SET capacidade = ? WHERE location_id = ?",
+                        [(cap, loc) for loc, _site, _desc, cap in LOCAIS])
         janela = meses.janela()
         for desc, pid, nome, cli, loc, status, agentes, lideres in RESERVAS:
             if con.execute("SELECT 1 FROM reservas WHERE resv_desc = ?", (desc,)).fetchone():
