@@ -68,7 +68,7 @@ code { font-size: 12px; }
   border-bottom: 3px solid var(--cnx-seafoam);
 }
 .marca { color: #fff; text-decoration: none; display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: .2px; }
-.marca img { height: 22px; width: auto; display: block; }
+.marca img { height: 24px; width: auto; display: block; }  /* logo recortada: mesma altura do "Controle CMAP" */
 .marca span { border-left: 1px solid rgba(255,255,255,.35); padding-left: 10px; }
 .topo nav { display: flex; flex-wrap: wrap; gap: 4px; }
 .topo nav a {
