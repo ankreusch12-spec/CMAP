@@ -32,73 +32,51 @@ nas reservas e na importação. A lista fica em `banco.py` (`MEUS_LOCAIS`) e pod
 
 ---
 
-## Como rodar no seu PC (passo a passo)
+## Como instalar e usar no seu PC (passo a passo)
 
-**1. Ter o Python instalado** (3.11 ou mais novo). No Windows, confira no Prompt de Comando:
+São **4 passos na primeira vez**. Depois, só o passo 4.
 
-```bash
-py --version
-```
+**1. Python instalado** (3.11 ou mais novo). Se não tiver, peça ao TI / Portal da Empresa e, na
+instalação, marque **“Add python.exe to PATH”**.
 
-Se não tiver, peça ao TI (em PC da empresa geralmente é pelo portal de software).
+**2. Baixar o controle**
+- Abra o link (logado no GitHub):
+  https://github.com/ankreusch12-spec/CMAP/archive/refs/heads/claude/gallant-wright-stczq4.zip
+  (depois que o código for para o `main`: botão verde **Code → Download ZIP** na página do repositório).
+- Clique com o botão direito no ZIP → **Extrair tudo…** → escolha uma pasta fixa, por exemplo
+  `Documentos\Controle CMAP`. Não rode de dentro do ZIP.
 
-**2. Baixar o projeto** (no GitHub: botão *Code → Download ZIP*, ou com git):
+**3. Instalar** — dê **dois cliques em `instalar.bat`**. Ele:
+- confere o Python;
+- cria o ambiente do controle (pasta `.venv`) e instala as bibliotecas;
+- pergunta **seu nome** (aparece no Histórico) e o **caminho do forecast**
+  (no Explorador: Shift + botão direito no arquivo ou na pasta → *Copiar como caminho* → cole com Ctrl+V).
+  Se não souber o caminho agora, tecle Enter: dá para enviar o forecast pela tela *Importar*.
 
-```bash
-git clone https://github.com/ankreusch12-spec/CMAP.git
-```
+As respostas ficam no `caminhos.txt` (só no seu PC). Para mudar depois: rode `instalar.bat` de novo
+ou edite o `caminhos.txt` no Bloco de Notas.
 
-**3. Entrar na pasta e criar o ambiente** (só na primeira vez):
+**4. Usar** — dê **dois cliques em `abrir_controle.bat`**. O navegador abre em http://127.0.0.1:5000.
+Deixe a janela preta aberta enquanto usa; para desligar, feche a janela.
 
-```bash
-cd CMAP
-```
+> Na primeira vez, se quiser conhecer as telas antes dos dados reais: na pasta do controle, abra o
+> Prompt de Comando e rode `.venv\Scripts\python.exe dados_exemplo.py` (dados fictícios).
+> Para começar do zero depois, apague a pasta `instance`.
 
-```bash
-py -m venv .venv
-```
+### Forecast ligado ao arquivo (como nas atas)
 
-```bash
-.venv\Scripts\activate
-```
+Com o caminho do forecast configurado, toda vez que você abre **O que subir**, **Gestores** ou **Frentes**
+o controle confere se o arquivo mudou e lê de novo sozinho (aviso verde no topo). Em **Importar** tem o
+botão **Atualizar agora**. Pode ser o **arquivo** ou a **pasta** (na pasta, vale o forecast salvo por último).
+O arquivo precisa estar no seu PC (pasta sincronizada do OneDrive/SharePoint serve; link `https://` não).
+Se estiver aberto no Excel ou o caminho estiver errado, aparece um aviso e vale o último forecast lido.
 
-```bash
-pip install -r requirements.txt
-```
+### Primeira vez com dados reais
 
-**4. (Opcional) Carregar dados de exemplo** para conhecer as telas:
-
-```bash
-python dados_exemplo.py
-```
-
-**5. Ligar o forecast** (igual às atas) — copie `caminhos.exemplo.txt` para `caminhos.txt` e ajuste a linha:
-
-```
-forecast = C:\Users\voce\OneDrive - Concentrix\Forecast\FORECAST OFICIAL 2025 - OUTBOUND NOVO.xlsx
-```
-
-Pode ser o **arquivo** ou a **pasta** (na pasta, vale o forecast salvo por último). É o mesmo formato do
-`caminhos.txt` das atas: dá para copiar a linha de lá. O arquivo precisa estar no seu PC (pasta sincronizada
-do OneDrive/SharePoint serve; link `https://` não). O `caminhos.txt` não vai para o GitHub.
-
-Com isso, toda vez que você abre **O que subir**, **Gestores** ou **Frentes**, o controle confere se o forecast
-mudou e lê de novo sozinho (aviso verde no topo). Em **Importar** tem o botão **Atualizar agora**.
-Se o arquivo estiver aberto no Excel ou o caminho estiver errado, aparece um aviso e vale o último forecast lido.
-
-**6. Abrir o controle:**
-
-```bash
-python app.py
-```
-
-E abra no navegador: **http://127.0.0.1:5000**. Para parar, `Ctrl + C` no terminal.
-
-> Nas próximas vezes, basta: abrir o terminal na pasta, `.venv\Scripts\activate` e `python app.py`.
-
-**Seu nome no histórico:** antes do `python app.py`, rode `set CMAP_USUARIO=Seu Nome` (Windows).
-
----
+1. **Locais**: digite a capacidade real de cada prédio.
+2. **Importar → Relatório do CMAP**: o que já está reservado (sem ele, “Disponíveis” fica zerado).
+3. **Frentes**: “Preencher MAS vazios” com o controle antigo e digite os MAS que faltarem.
+4. Confira **O que subir** e **Gestores**.
 
 ## Regras do cálculo (forecast → CMAP)
 
@@ -142,6 +120,9 @@ planilhas.py      importar / exportar Excel no formato do CMAP
 meses.py          janela de 12 meses (Nov-2026 ... Oct-2027)
 seguranca.py      proteções (CSRF, só acesso local, cabeçalhos)
 dados_exemplo.py  dados fictícios para teste
+configurar.py     perguntas do instalar.bat (nome e caminho do forecast)
+instalar.bat      instalação (dois cliques, uma vez)
+abrir_controle.bat  abre o controle no navegador
 templates/        HTML de cada tela
 static/           estilo (CSS) e JavaScript
 tests/            testes automáticos  ->  python -m pytest

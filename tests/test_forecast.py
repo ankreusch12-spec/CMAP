@@ -236,3 +236,16 @@ def test_forecast_ligado_ao_arquivo(tmp_path):
     app.config["FORECAST_CAMINHO"] = str(tmp_path / "nao existe")
     html = c.get("/subir").get_data(as_text=True)
     assert "Não achei o forecast" in html and "FORECAST OFICIAL.xlsx" in html
+
+
+def test_configurar_cria_caminhos(tmp_path, monkeypatch):
+    import configurar
+    pasta = tmp_path / "Forecast"
+    pasta.mkdir()
+    forecast_ficticio(pasta / "FORECAST.xlsx")
+    monkeypatch.setattr(configurar, "ARQUIVO", tmp_path / "caminhos.txt")
+    respostas = iter(["Fulana de Tal", str(tmp_path / "errado"), f'"{pasta}"'])  # 1º caminho errado
+    monkeypatch.setattr("builtins.input", lambda _msg="": next(respostas))
+    configurar.main()
+    lido = forecast.ler_caminhos(tmp_path / "caminhos.txt")
+    assert lido == {"usuario": "Fulana de Tal", "forecast": str(pasta)}

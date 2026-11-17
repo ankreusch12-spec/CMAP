@@ -42,6 +42,7 @@ LIMITE_TEXTO = 120
 
 
 def criar_app(config: dict | None = None) -> Flask:
+    caminhos = forecast.ler_caminhos(PASTA / "caminhos.txt")
     app = Flask(__name__, instance_relative_config=True)
     os.makedirs(app.instance_path, exist_ok=True)
     app.config.update(
@@ -50,9 +51,9 @@ def criar_app(config: dict | None = None) -> Flask:
         MAX_CONTENT_LENGTH=20 * 1024 * 1024,          # upload de no máximo 20 MB
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Strict",
-        USUARIO=os.environ.get("CMAP_USUARIO", "Usuário local"),
-        # Forecast ligado ao arquivo: linha "forecast = ..." do caminhos.txt (como nas atas)
-        FORECAST_CAMINHO=forecast.ler_caminhos(PASTA / "caminhos.txt").get("forecast", ""),
+        # Seu nome e o forecast vêm do caminhos.txt (criado pelo instalar.bat / configurar.py)
+        USUARIO=(os.environ.get("CMAP_USUARIO") or caminhos.get("usuario") or "Usuário local"),
+        FORECAST_CAMINHO=caminhos.get("forecast", ""),
     )
     if config:
         app.config.update(config)
