@@ -72,7 +72,21 @@ pip install -r requirements.txt
 python dados_exemplo.py
 ```
 
-**5. Abrir o controle:**
+**5. Ligar o forecast** (igual às atas) — copie `caminhos.exemplo.txt` para `caminhos.txt` e ajuste a linha:
+
+```
+forecast = C:\Users\voce\OneDrive - Concentrix\Forecast\FORECAST OFICIAL 2025 - OUTBOUND NOVO.xlsx
+```
+
+Pode ser o **arquivo** ou a **pasta** (na pasta, vale o forecast salvo por último). É o mesmo formato do
+`caminhos.txt` das atas: dá para copiar a linha de lá. O arquivo precisa estar no seu PC (pasta sincronizada
+do OneDrive/SharePoint serve; link `https://` não). O `caminhos.txt` não vai para o GitHub.
+
+Com isso, toda vez que você abre **O que subir**, **Gestores** ou **Frentes**, o controle confere se o forecast
+mudou e lê de novo sozinho (aviso verde no topo). Em **Importar** tem o botão **Atualizar agora**.
+Se o arquivo estiver aberto no Excel ou o caminho estiver errado, aparece um aviso e vale o último forecast lido.
+
+**6. Abrir o controle:**
 
 ```bash
 python app.py
@@ -104,7 +118,8 @@ arquivo diferente da regra e endereços não reconhecidos.
 
 ## Rotina sugerida
 
-1. **Importar** o forecast novo (e, se quiser conferir, o relatório do CMAP).
+1. O forecast entra sozinho pelo `caminhos.txt` (ou envie em **Importar**). Importe o **relatório do CMAP**
+   sempre que quiser conferir o que está lançado.
 2. **O que subir**: para cada reserva com ▲/▼, lance no CMAP e clique **✔ Lançado no CMAP**.
 3. Frentes novas sem MAS aparecem em alerta → preencha em **Frentes**.
 

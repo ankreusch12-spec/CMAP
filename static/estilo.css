@@ -212,3 +212,5 @@ td.detalhe { font-size: 12px; max-width: 520px; }
 .pct.sobra { background: var(--negativo); color: var(--negativo-texto); }
 .pct.falta { background: var(--atencao); color: var(--atencao-texto); }
 span.pct { padding: 1px 6px; border-radius: 3px; }
+
+pre { background: var(--barra); padding: 8px 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }

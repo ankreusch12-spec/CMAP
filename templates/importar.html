@@ -4,6 +4,26 @@
 <h1>Importar</h1>
 
 <h2>1. Forecast oficial (MOP)</h2>
+<div class="cartao">
+  {% if caminho %}
+    <p><b>Ligado ao arquivo</b> (caminhos.txt): <code>{{ caminho }}</code></p>
+    <p class="ajuda">Toda vez que você abre <i>O que subir</i>, <i>Gestores</i> ou <i>Frentes</i>, o controle
+      confere se o forecast mudou e lê de novo sozinho.
+      {% if info %}Último lido: <b>{{ info.arquivo }}</b> em {{ info.importado_em }}.{% endif %}</p>
+    <form method="post" action="{{ url_for('atualizar_forecast') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="botao">Atualizar agora</button>
+    </form>
+  {% else %}
+    <p><b>Ainda não está ligado ao arquivo.</b> Para o controle ler o forecast sozinho (como nas atas),
+      crie o arquivo <code>caminhos.txt</code> na pasta do controle com a linha:</p>
+    <pre>forecast = C:\Users\voce\OneDrive - Concentrix\Forecast\FORECAST OFICIAL.xlsx</pre>
+    <p class="ajuda">Pode ser o arquivo ou a pasta (aí vale o forecast salvo por último). Para copiar: no Explorador,
+      Shift + botão direito no arquivo → <i>Copiar como caminho</i>. Depois feche e abra o controle de novo.
+      Enquanto isso, dá para enviar o arquivo aqui embaixo.</p>
+  {% endif %}
+</div>
+
 <p class="ajuda">
   Envie o <b>FORECAST OFICIAL - OUTBOUND</b>. O controle lê a aba <code>BASE</code> (MOP, Home, Staff
   e a carga 6H20/7H12 de cada frente), substitui o forecast anterior e mostra em

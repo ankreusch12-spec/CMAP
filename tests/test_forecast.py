@@ -204,3 +204,35 @@ def test_maior_turno_nas_frentes_6h20():
     assert forecast.pas_no_predio(seis, {"mop": 27, "home": 0}) == 13.5
     # integral: MOP − Home
     assert forecast.pas_no_predio({"fator": 1}, {"mop": 10, "home": 3, "ic_manha": 9}) == 7
+
+
+def test_forecast_ligado_ao_arquivo(tmp_path):
+    import os
+    pasta = tmp_path / "Forecast"
+    pasta.mkdir()
+    forecast_ficticio(pasta / "FORECAST OFICIAL.xlsx")
+    Workbook().save(pasta / "outra planilha.xlsx")      # mais nova, mas não é forecast
+    (tmp_path / "caminhos.txt").write_text(f"# comentário\nforecast = \"{pasta}\"\n", encoding="utf-8")
+    assert forecast.ler_caminhos(tmp_path / "caminhos.txt")["forecast"] == str(pasta)
+
+    app = criar_app({"TESTING": True, "BANCO": str(tmp_path / "t.db"), "FORECAST_CAMINHO": str(pasta)})
+    c = app.test_client()
+
+    def importacoes():
+        with app.app_context():
+            return banco.db().execute(
+                "SELECT COUNT(*) FROM historico WHERE acao = 'Forecast importado'").fetchone()[0]
+
+    assert "Forecast atualizado sozinho" in c.get("/subir").get_data(as_text=True)
+    assert importacoes() == 1
+    c.get("/gestores")                                    # nada mudou: não lê de novo
+    assert importacoes() == 1
+    arq = pasta / "FORECAST OFICIAL.xlsx"
+    os.utime(arq, (arq.stat().st_atime, arq.stat().st_mtime + 60))   # arquivo salvo de novo
+    c.get("/frentes")
+    assert importacoes() == 2
+
+    # caminho errado: avisa e mantém o último forecast
+    app.config["FORECAST_CAMINHO"] = str(tmp_path / "nao existe")
+    html = c.get("/subir").get_data(as_text=True)
+    assert "Não achei o forecast" in html and "FORECAST OFICIAL.xlsx" in html

@@ -21,7 +21,7 @@ STATUS_NOVA = "Confirmado"
 
 # ---------------------------------------------------------------- guardar o forecast
 
-def salvar_forecast(frentes, avisos, nome_arquivo: str):
+def salvar_forecast(frentes, avisos, nome_arquivo: str, origem: str = ""):
     """Substitui o forecast guardado pelo novo e atualiza a lista de frentes."""
     con = banco.db()
     con.execute("DELETE FROM forecast")
@@ -38,15 +38,42 @@ def salvar_forecast(frentes, avisos, nome_arquivo: str):
               mes, v["mop"], v["home"], v["staff_ic"], v["staff_ho"],
               v.get("ic_manha", 0), v.get("ic_tarde", 0))
              for mes, v in f["valores"].items()])
-    con.execute("""INSERT INTO forecast_info (id, arquivo, importado_em, quem, avisos)
-                   VALUES (1, ?, ?, ?, ?)
+    con.execute("""INSERT INTO forecast_info (id, arquivo, importado_em, quem, avisos, origem)
+                   VALUES (1, ?, ?, ?, ?, ?)
                    ON CONFLICT (id) DO UPDATE SET arquivo = excluded.arquivo,
                      importado_em = excluded.importado_em, quem = excluded.quem,
-                     avisos = excluded.avisos""",
+                     avisos = excluded.avisos, origem = excluded.origem""",
                 (nome_arquivo[:120], datetime.now().strftime("%Y-%m-%d %H:%M"),
-                 current_app.config["USUARIO"], "\n".join(avisos)))
+                 current_app.config["USUARIO"], "\n".join(avisos), origem))
     banco.registrar("Forecast importado", f"{nome_arquivo[:120]} — {len(frentes)} frentes", con)
     con.commit()
+
+
+def sincronizar(forcar: bool = False):
+    """
+    Forecast ligado ao arquivo (caminhos.txt): se o arquivo mudou desde a última
+    leitura, importa de novo sozinho. Devolve (mensagem, tipo) para mostrar na tela,
+    ou None quando não há nada a avisar.
+    """
+    caminho = current_app.config.get("FORECAST_CAMINHO")
+    if not caminho:
+        return None
+    arquivo = forecast.achar_arquivo(caminho)
+    if not arquivo:
+        return (f"Não achei o forecast em “{caminho}” (caminhos.txt). Confira o caminho; "
+                "até lá, vale o último forecast importado.", "erro")
+    modificado = datetime.fromtimestamp(arquivo.stat().st_mtime)
+    marca = f"{arquivo.resolve()}|{arquivo.stat().st_mtime_ns}"
+    info = info_forecast()
+    if not forcar and info and info["origem"] == marca:
+        return None                                   # nada mudou
+    try:
+        frentes, avisos = forecast.ler(arquivo)
+    except forecast.ErroForecast as erro:
+        return (f"{erro} Até lá, vale o último forecast importado.", "erro")
+    salvar_forecast(frentes, avisos, arquivo.name, origem=marca)
+    return (f"Forecast atualizado sozinho: {arquivo.name} (salvo em "
+            f"{modificado.strftime('%d/%m/%Y %H:%M')}), {len(frentes)} frentes.", "ok")
 
 
 def frentes_salvas():

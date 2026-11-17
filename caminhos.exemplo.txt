@@ -1,0 +1,10 @@
+# Copie este arquivo para caminhos.txt (na mesma pasta do app.py) e ajuste o caminho.
+# É o mesmo formato do caminhos.txt do gerador das atas: dá para copiar a linha de lá.
+#
+# forecast = o arquivo do FORECAST OFICIAL ou a PASTA onde ele fica
+#            (na pasta, vale o forecast salvo por último).
+# Para copiar o caminho: no Explorador, Shift + botão direito no arquivo > Copiar como caminho.
+# O arquivo precisa estar no seu PC (pasta sincronizada do OneDrive/SharePoint serve;
+# link https:// não serve).
+
+forecast = C:\Users\voce\OneDrive - Concentrix\Forecast\FORECAST OFICIAL 2025 - OUTBOUND NOVO.xlsx

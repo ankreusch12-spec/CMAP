@@ -125,7 +125,8 @@ CREATE TABLE IF NOT EXISTS forecast_info (
     arquivo       TEXT NOT NULL,
     importado_em  TEXT NOT NULL,
     quem          TEXT NOT NULL,
-    avisos        TEXT NOT NULL DEFAULT ''
+    avisos        TEXT NOT NULL DEFAULT '',
+    origem        TEXT NOT NULL DEFAULT ''  -- caminho|data do arquivo lido sozinho (caminhos.txt)
 );
 
 -- Cada vez que você marca "Lançado no CMAP".
@@ -188,6 +189,8 @@ def atualizar_banco_antigo(con):
     # versão 4: gestor nas frentes e turnos no forecast
     if "gerencia" not in colunas("frentes"):
         con.execute("ALTER TABLE frentes ADD COLUMN gerencia TEXT NOT NULL DEFAULT ''")
+    if "origem" not in colunas("forecast_info"):
+        con.execute("ALTER TABLE forecast_info ADD COLUMN origem TEXT NOT NULL DEFAULT ''")
     for nova in ("ic_manha", "ic_tarde"):
         if nova not in colunas("forecast"):
             con.execute(f"ALTER TABLE forecast ADD COLUMN {nova} REAL NOT NULL DEFAULT 0")

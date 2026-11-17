@@ -21,6 +21,7 @@ Mapa do código:
 import os
 import re
 from datetime import date
+from pathlib import Path
 
 from flask import (Flask, abort, flash, redirect, render_template, request,
                    send_file, url_for)
@@ -32,6 +33,8 @@ import meses
 import planilhas
 import seguranca
 import subir
+
+PASTA = Path(__file__).resolve().parent
 
 # Regras simples para validar o que é digitado.
 RE_CODIGO = re.compile(r"^[A-Z0-9][A-Z0-9_\-]{0,39}$")     # Dept Code, Shift, IDs
@@ -48,6 +51,8 @@ def criar_app(config: dict | None = None) -> Flask:
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Strict",
         USUARIO=os.environ.get("CMAP_USUARIO", "Usuário local"),
+        # Forecast ligado ao arquivo: linha "forecast = ..." do caminhos.txt (como nas atas)
+        FORECAST_CAMINHO=forecast.ler_caminhos(PASTA / "caminhos.txt").get("forecast", ""),
     )
     if config:
         app.config.update(config)
@@ -235,7 +240,13 @@ def registrar_rotas(app: Flask):
     # ------------------------------------------------------------ IMPORTAR / EXPORTAR
     @app.get("/importar")
     def importar():
-        return render_template("importar.html")
+        return render_template("importar.html", caminho=app.config.get("FORECAST_CAMINHO"),
+                               info=subir.info_forecast())
+
+    @app.post("/importar/forecast/atualizar")
+    def atualizar_forecast():
+        avisar_forecast(forcar=True)
+        return redirect(url_for("importar"))
 
     @app.post("/importar")
     def receber_importacao():
@@ -284,6 +295,7 @@ def registrar_rotas(app: Flask):
     # ------------------------------------------------------------ O QUE SUBIR
     @app.get("/subir")
     def o_que_subir():
+        avisar_forecast()
         janela = meses.janela()
         tudo = request.args.get("tudo") == "1"
         lista = subir.itens(janela)
@@ -311,6 +323,7 @@ def registrar_rotas(app: Flask):
     # ------------------------------------------------------------ GESTORES
     @app.get("/gestores")
     def visao_gestores():
+        avisar_forecast()
         janela = meses.janela()
         chave = request.args.get("mes", janela[0].chave)
         mes = next((m for m in janela if m.chave == chave), janela[0])
@@ -357,6 +370,7 @@ def registrar_rotas(app: Flask):
     # ------------------------------------------------------------ FRENTES (de-para LOB -> MAS)
     @app.get("/frentes")
     def frentes():
+        avisar_forecast()
         lista = banco.db().execute(
             """SELECT fr.*, (SELECT group_concat(DISTINCT f.endereco || ' ' || f.andar)
                              FROM forecast f WHERE f.lob = fr.lob) AS enderecos
@@ -414,6 +428,13 @@ def registrar_rotas(app: Flask):
 
 
 # ---------------------------------------------------------------- leitura de formulários
+
+def avisar_forecast(forcar: bool = False):
+    """Lê o forecast do caminhos.txt se ele mudou, e mostra o resultado na tela."""
+    resultado = subir.sincronizar(forcar)
+    if resultado:
+        flash(*resultado)
+
 
 def arquivo_xlsx():
     """Confere o upload: tem que ser .xlsx de verdade. Se não for, avisa e devolve None."""

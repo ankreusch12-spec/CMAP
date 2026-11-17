@@ -27,6 +27,7 @@ import re
 import unicodedata
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 
 from openpyxl import load_workbook
 
@@ -126,6 +127,9 @@ def ler(arquivo):
     """
     try:
         livro = load_workbook(arquivo, read_only=True, data_only=True)
+    except PermissionError as erro:
+        raise ErroForecast("O forecast está aberto no Excel (o Windows bloqueia a leitura). "
+                           "Feche o arquivo e atualize a página.") from erro
     except Exception as erro:
         raise ErroForecast("Não consegui abrir o arquivo. Ele é um .xlsx válido?") from erro
     try:
@@ -182,6 +186,51 @@ def ler(arquivo):
         if not f["location_id"]:
             avisos.append(f"{f['lob']}: endereço “{f['endereco']}” não reconhecido.")
     return list(frentes.values()), avisos
+
+
+# ================================================================ LIGAÇÃO COM O ARQUIVO (caminhos.txt)
+
+def ler_caminhos(arquivo: Path) -> dict:
+    """
+    Lê o caminhos.txt (mesmo formato do gerador das atas):
+        forecast = C:\\Users\\voce\\OneDrive\\Forecast\\FORECAST OFICIAL.xlsx
+    Pode ser o arquivo ou a pasta. Linhas com # são ignoradas.
+    """
+    caminhos = {}
+    if not arquivo.exists():
+        return caminhos
+    for linha in arquivo.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+        linha = linha.strip()
+        if not linha or linha.startswith("#") or "=" not in linha:
+            continue
+        nome, valor = (x.strip().strip('"').strip() for x in linha.split("=", 1))
+        caminhos[normalizar(nome).replace(" ", "")] = valor
+    return caminhos
+
+
+def _parece_forecast(arquivo: Path) -> bool:
+    """Olha só o cabeçalho (rápido): tem LOB WFM, DADO e ENDEREÇO INTEGRATION?"""
+    try:
+        livro = load_workbook(arquivo, read_only=True, data_only=True)
+        try:
+            _achar_cabecalho(livro)
+            return True
+        finally:
+            livro.close()
+    except Exception:
+        return False
+
+
+def achar_arquivo(caminho: str) -> Path | None:
+    """O arquivo informado, ou o forecast salvo por último dentro da pasta informada."""
+    alvo = Path(caminho).expanduser()
+    if alvo.is_file():
+        return alvo
+    if alvo.is_dir():
+        candidatos = sorted((p for p in alvo.glob("*.xlsx") if not p.name.startswith("~$")),
+                            key=lambda p: p.stat().st_mtime, reverse=True)
+        return next((p for p in candidatos if _parece_forecast(p)), None)
+    return None
 
 
 # ================================================================ CALCULAR
