@@ -236,3 +236,20 @@ details.incluir > summary::-webkit-details-marker { display: none; }
 td form { display: inline; }
 .grade-campos input, .grade-campos select, .grade-campos input.curto { width: 100%; min-width: 0; }
 details.incluir:not([open]) { border: 0; padding: 0; }
+
+/* Painel por carteira */
+.painel-carteiras td.recuo { padding-left: 24px; }
+.painel-carteiras tr.cab-local td { background: var(--cabecalho); font-weight: 600; }
+.painel-carteiras tr.outras td { color: var(--suave); font-style: italic; }
+.painel-carteiras tr.total-local td { font-weight: 700; border-top: 1px solid var(--borda); }
+.painel-carteiras tbody.bloco-local tr:last-child td { border-bottom: 2px solid var(--borda); }
+.titulo-cidade { margin: 32px 0 0; font-size: 20px; color: var(--cnx-jade); border-bottom: 3px solid var(--cnx-seafoam); padding-bottom: 4px; }
+
+/* Reserva: comparativo Arquivo × CMAP × Forecast */
+.comparacao tr.cab-dept td { background: var(--cabecalho); font-weight: 700; font-size: 12px; }
+.comparacao tr.linha-arquivo td { color: var(--suave); }
+.comparacao tr.linha-dif td { font-size: 12px; }
+.comparacao td.difere { background: var(--atencao); color: var(--atencao-texto); font-weight: 700; }
+.etiqueta-carteira { background: var(--cnx-azul); color: #fff; border-radius: 3px; padding: 1px 6px; font-size: 11px; font-weight: 700; }
+.filtro-cartoes { margin: 10px 0; }
+[hidden] { display: none !important; }

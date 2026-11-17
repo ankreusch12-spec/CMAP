@@ -10,7 +10,7 @@ Mapa do código:
     app.py        -> as páginas (rotas) e o que cada uma faz   <- você está aqui
     banco.py      -> banco de dados (SQLite) e consultas
     forecast.py   -> lê o FORECAST OFICIAL e aplica as regras (6H20 = maior turno, arredonda p/ cima)
-    subir.py      -> "O que subir no CMAP": forecast × controle e os lançamentos
+    subir.py      -> "Reserva": forecast × controle e os lançamentos
     gestores.py   -> "Resumo CMAP - Ocupação prédios" por gestor
     planilhas.py  -> importar / exportar Excel no formato do CMAP
     meses.py      -> janela de 12 meses (Nov-2026 ... Oct-2027)
@@ -280,6 +280,15 @@ def registrar_rotas(app: Flask):
               f"novos e {resumo['valores']} valores mês a mês. "
               f"{resumo['ignoradas']} linha(s) de locais que você não acompanha foram ignoradas.",
               "ok")
+        # Total Seats da aba Summary (BRA_Distribution_Capacity) vira a capacidade dos prédios
+        seats = planilhas.ler_seats(arquivo.stream)
+        if seats:
+            con = banco.db()
+            for location_id, total in seats.items():
+                con.execute("UPDATE locais SET capacidade = ? WHERE location_id = ?", (total, location_id))
+            banco.registrar("Total Seats do arquivo", ", ".join(f"{k} {v}" for k, v in seats.items()))
+            con.commit()
+            flash(f"Total Seats atualizado pelo arquivo em {len(seats)} prédio(s).", "ok")
         for aviso in avisos[:10]:
             flash(aviso, "erro")
         return redirect(url_for("reservas"))
@@ -317,6 +326,8 @@ def registrar_rotas(app: Flask):
                                itens=lista if tudo else [i for i in lista if i["muda"]],
                                total=len(lista), pendentes=sum(i["muda"] for i in lista),
                                sem_mas=subir.pendencias_de_para(), info=subir.info_forecast(),
+                               carteiras=sorted({i["carteira"] for i in lista if i["carteira"]}),
+                               tem_arquivo=subir.tem_arquivo(),
                                lancamentos=subir.lancamentos())
 
     @app.post("/subir/lancar")
@@ -342,8 +353,13 @@ def registrar_rotas(app: Flask):
         chave = request.args.get("mes", janela[0].chave)
         mes = next((m for m in janela if m.chave == chave), janela[0])
         gerente = request.args.get("gerente", "")
-        blocos = [b for b in gestores.visao(mes) if not gerente or b["gerente"] == gerente]
+        cidade = request.args.get("cidade", "")
+        todos = gestores.visao(mes)
+        blocos = [b for b in todos if (not gerente or b["gerente"] == gerente)
+                  and (not cidade or b["cidade"] == cidade)]
+        cidades = [c for c in banco.ORDEM_CIDADES if any(b["cidade"] == c for b in todos)]
         return render_template("gestores.html", janela=janela, mes=mes, gerente=gerente,
+                               cidade=cidade, cidades=cidades,
                                lista_gerentes=gestores.gerentes(), blocos=blocos,
                                editar=request.args.get("editar") == "1",
                                categorias=gestores.CATEGORIAS_STAFF, faixa=gestores.faixa,
@@ -352,7 +368,8 @@ def registrar_rotas(app: Flask):
     @app.post("/gestores/detalhe")
     def salvar_detalhe():
         volta = url_for("visao_gestores", mes=request.form.get("mes", ""),
-                        gerente=request.form.get("gerente", ""), editar=1)
+                        gerente=request.form.get("gerente", ""),
+                        cidade=request.form.get("cidade", ""), editar=1)
         try:
             project_id = codigo("project_id")
             location_id = texto("location_id")
@@ -446,7 +463,7 @@ def registrar_rotas(app: Flask):
         banco.registrar("Carteira manual salva", f"{lob} → {mas} em {location_id} ({carga}): "
                         f"{n['mop']} HCs, home {n['home']}, staff {n['staff_ic'] + n['staff_ho']}")
         con.commit()
-        flash(f"Carteira {lob} salva. Ela já entra no O que subir e em Gestores.", "ok")
+        flash(f"Carteira {lob} salva. Ela já entra na Reserva e em Gestores.", "ok")
         return redirect(url_for("frentes"))
 
     @app.post("/frentes/manual/excluir")

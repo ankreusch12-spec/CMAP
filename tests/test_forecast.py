@@ -385,3 +385,22 @@ def test_carteira_manual_que_passa_a_vir_no_forecast(cliente, app, tmp_path):
         "csrf_token": t, "lob": "FRENTE INTEGRAL", "project_id": "EXEMPLO100",
         "location_id": "BR-CUR-MALDE-02", "carga": "7H12", "mop": "5"}, follow_redirects=True)
     assert "já vem no forecast" in r.get_data(as_text=True)
+
+
+def test_gestores_separado_por_cidade(cliente, app):
+    import gestores
+    t = cliente.token
+    with app.app_context():
+        for loc in ("BR-PON-RUASE", "BR-CUR-MALDE-02"):
+            banco.db().execute("INSERT INTO locais (location_id, descricao) VALUES (?, ?)", (loc, loc))
+        banco.db().commit()
+    for lob, loc in (("FRENTE PG", "BR-PON-RUASE"), ("FRENTE CWB", "BR-CUR-MALDE-02")):
+        cliente.post("/frentes/manual", data={"csrf_token": t, "lob": lob, "conta": "CLIENTE AZUL",
+                                              "gerencia": "GESTOR UM", "project_id": "EXEMPLO500",
+                                              "location_id": loc, "carga": "7H12", "mop": "10"})
+    with app.app_context():
+        blocos = gestores.visao(MES)
+        assert [(b["cidade"], b["gerente"]) for b in blocos] == [("Curitiba", "GESTOR UM"),
+                                                                 ("Ponta Grossa", "GESTOR UM")]
+    html = cliente.get(f"/gestores?mes={MES.chave}&cidade=Curitiba").get_data(as_text=True)
+    assert "OPERAÇÕES GESTOR UM" in html and "Ponta Grossa ·" not in html

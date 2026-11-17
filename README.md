@@ -18,7 +18,7 @@ nas reservas e na importação. A lista fica em `banco.py` (`MEUS_LOCAIS`) e pod
 
 | Tela | Para que serve | No CMAP equivale a |
 |---|---|---|
-| **O que subir** | Forecast × o que está no CMAP, por reserva (MAS + local) e mês: ▲ aumentar, ▼ reduzir, reservas novas. Botão **✔ Lançado no CMAP** atualiza o controle e registra o lançamento. | — |
+| **Reserva** | Forecast × o que está no CMAP, por reserva (MAS + local) e mês: ▲ aumentar, ▼ reduzir, reservas novas. Botão **✔ Lançado no CMAP** atualiza o controle e registra o lançamento. | — |
 | **Gestores** | “Resumo CMAP - Ocupação prédios” por gestor (GERENCIA do forecast): uma coluna por conta/prédio com HCs, PA's ocupadas × reservadas, staff e % de ocupação; particularidades e staff detalhado editáveis. | — |
 | **Frentes** | De-para LOB WFM → MAS (Project ID), preenchido uma vez (pode vir do controle antigo). **+ Incluir carteira**: frente ativa que não está no forecast (local, carga, HCs, home, staff, gestor e MAS; os números valem para todos os meses). Se depois ela passar a vir no forecast, o forecast assume. | — |
 | **Painel** | Ocupação por cidade e local, mês a mês: Res, Avai, % (mesma conta da planilha), com subtotal por cidade. Negativo em vermelho. | Aba *Summary* da planilha |
@@ -70,7 +70,7 @@ Deixe a janela preta aberta enquanto usa; para desligar, feche a janela.
 
 ### Forecast ligado ao arquivo (como nas atas)
 
-Com o caminho do forecast configurado, toda vez que você abre **O que subir**, **Gestores** ou **Frentes**
+Com o caminho do forecast configurado, toda vez que você abre **Reserva**, **Gestores** ou **Frentes**
 o controle confere se o arquivo mudou e lê de novo sozinho (aviso verde no topo). Em **Importar** tem o
 botão **Atualizar agora**. Pode ser o **arquivo** ou a **pasta** (na pasta, vale o forecast salvo por último).
 O arquivo precisa estar no seu PC (pasta sincronizada do OneDrive/SharePoint serve; link `https://` não).
@@ -84,7 +84,7 @@ O **Painel** mostra o quadro **Primeiros passos** com o que já foi feito e o qu
 2. **Importar → 2. O que já está no CMAP**: envie a planilha **BRA_Distribution_Capacity** (o controle lê o
    relatório do CMAP guardado na tabela dinâmica da aba *12 month forecast*). Sem isso, “Disponíveis” fica zerado.
 3. **Frentes**: “Preencher MAS vazios” com o controle antigo e digite os MAS que faltarem.
-4. Confira **O que subir** e **Gestores**.
+4. Confira **Reserva** e **Gestores**.
 
 ## Regras do cálculo (forecast → CMAP)
 
@@ -115,14 +115,14 @@ As linhas de staff vêm do que está reservado no CMAP, por Dept Code (só códi
 | Outros (diretos) | qualquer outro código com DIR |
 
 Indiretos (`-INDIR`) e de apoio sem DIR (ADMINFACILITIES, HRGENERALIST…) não entram. Se você digitar o staff em
-“Editar particularidades e staff”, vale o digitado. Em **O que subir**, quando o forecast não traz staff para a
+“Editar particularidades e staff”, vale o digitado. Em **Reserva**, quando o forecast não traz staff para a
 reserva, o staff do CMAP fica como está.
 
 ## Rotina sugerida
 
 1. O forecast entra sozinho pelo `caminhos.txt` (ou envie em **Importar**). Importe o **relatório do CMAP**
    sempre que quiser conferir o que está lançado.
-2. **O que subir**: para cada reserva com ▲/▼, lance no CMAP e clique **✔ Lançado no CMAP**.
+2. **Reserva**: para cada reserva com ▲/▼, lance no CMAP e clique **✔ Lançado no CMAP**.
 3. Frentes novas sem MAS aparecem em alerta → preencha em **Frentes**.
 
 ## Conferência com a planilha de capacidade (reunião de segunda)

@@ -4,7 +4,7 @@
 <h1>Frentes do forecast (de-para LOB → MAS)</h1>
 <p class="ajuda">
   O forecast não traz o MAS do CMAP (<code>WHBRASIL…</code>). Preencha uma vez por frente; as frentes
-  sem MAS ficam fora do “O que subir”. As frentes aparecem aqui depois de importar o forecast;
+  sem MAS ficam fora da tela “Reserva”. As frentes aparecem aqui depois de importar o forecast;
   carteiras ativas que não estão no forecast entram pelo <b>+ Incluir carteira</b>.
 </p>
 
@@ -20,7 +20,7 @@
 <details class="cartao incluir" {{ 'open' if e }}>
   <summary class="botao">{{ '✎ Editar carteira ' ~ e.lob if e else '+ Incluir carteira' }}</summary>
   <p class="ajuda">Para carteiras <b>ativas que não estão no forecast</b>. Os números valem para todos os
-    meses e entram no <i>O que subir</i>, em <i>Gestores</i> e no <i>Painel</i> como as outras frentes.
+    meses e entram na <i>Reserva</i>, em <i>Gestores</i> e no <i>Painel</i> como as outras frentes.
     Mesma regra: PAs = HCs − Home (integral) ou o maior turno (6H20).</p>
   <form method="post" action="{{ url_for('salvar_frente_manual') }}" class="formulario grade-campos">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

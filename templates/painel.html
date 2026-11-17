@@ -3,9 +3,11 @@
 {% block conteudo %}
 <h1>Painel de ocupação</h1>
 <p class="ajuda">
-  Mesma conta da aba <i>Summary</i> da planilha: <b>Res</b> = assentos reservados
-  (status Confirmado e Fila mensal), <b>Avai</b> = capacidade − reservado.
-  Em vermelho: reservado acima da capacidade. Só aparecem os locais que você acompanha.
+  Por prédio, mês a mês: o reservado no CMAP de cada <b>carteira sua</b>
+  (status Confirmado e Fila mensal) e, em cinza, o das <b>outras carteiras</b> do prédio —
+  elas não são suas, mas ocupam lugar, então entram no disponível.
+  <b>Total Seats</b> vem do arquivo BRA_Distribution_Capacity (aba Summary).
+  Em vermelho: reservado acima dos seats.
 </p>
 
 {% set faltam = passos|rejectattr(0)|list %}
@@ -21,69 +23,53 @@
     </li>
     {% endfor %}
   </ol>
-  <p class="ajuda">Depois: <a href="{{ url_for('o_que_subir') }}">O que subir</a> mostra o que lançar no CMAP e
+  <p class="ajuda">Depois: <a href="{{ url_for('o_que_subir') }}">Reserva</a> mostra o que lançar no CMAP e
     <a href="{{ url_for('visao_gestores') }}">Gestores</a> o resumo por gestor.</p>
 </section>
 {% endif %}
 
+{% macro linhas_total(lista, rotulo) %}
+  <tr class="total-local"><td class="fixa">Total reservado{{ rotulo }}</td>{% for x in lista %}<td class="num">{{ x.total }}</td>{% endfor %}</tr>
+  <tr><td class="fixa">Total Seats (arquivo)</td>{% for x in lista %}<td class="num">{{ x.seats or '—' }}</td>{% endfor %}</tr>
+  <tr><td class="fixa">Disponível</td>{% for x in lista %}<td class="num {{ 'negativo' if x.disp is not none and x.disp < 0 }}">{{ '—' if x.disp is none else x.disp }}</td>{% endfor %}</tr>
+  <tr class="linha-pct"><td class="fixa">Ocupação</td>{% for x in lista %}<td class="num pct">{{ '—' if x.pct is none else '{:.0%}'.format(x.pct) }}</td>{% endfor %}</tr>
+{% endmacro %}
+
 {% if not grupos %}
-  <div class="vazio">
-    Nenhum local cadastrado ainda. Use <a href="{{ url_for('importar') }}">Importar</a>
-    com o relatório do CMAP, ou rode <code>python dados_exemplo.py</code> para testar.
-  </div>
+  <div class="vazio">Nenhum local acompanhado. Confira <a href="{{ url_for('locais') }}">Locais</a>.</div>
 {% else %}
 <div class="rolagem">
-<table class="grade painel">
+<table class="grade painel painel-carteiras">
   <thead>
-    <tr>
-      <th rowspan="2" class="fixa">Local</th>
-      <th rowspan="2">Total Seats</th>
-      {% for m in janela %}<th colspan="3">{{ m.rotulo }}</th>{% endfor %}
-    </tr>
-    <tr>
-      {% for m in janela %}<th>Res</th><th>Avai</th><th>Occ</th>{% endfor %}
-    </tr>
+    <tr><th class="fixa">Local / carteira</th>{% for m in janela %}<th class="num">{{ m.rotulo }}</th>{% endfor %}</tr>
   </thead>
-
   {% for g in grupos %}
   <tbody>
-    <tr class="cidade"><td class="fixa" colspan="2">{{ g.cidade|upper }}</td><td colspan="{{ janela|length * 3 }}"></td></tr>
-    {% for l in g.linhas %}
-    <tr>
-      <td class="fixa">
-        <span class="codigo">{{ l.local.location_id }}</span><br>{{ l.local.descricao }}
-      </td>
-      <td class="num">{{ l.local.capacidade or '—' }}</td>
-      {% for c in l.celulas %}
-        <td class="num">{{ c.res }}</td>
-        <td class="num {{ 'negativo' if c.disp is not none and c.disp < 0 }}">{{ '—' if c.disp is none else c.disp }}</td>
-        <td class="num pct">{{ '—' if c.pct is none else '{:.0%}'.format(c.pct) }}</td>
-      {% endfor %}
-    </tr>
+    <tr class="cidade"><td class="fixa">{{ g.cidade|upper }}</td><td colspan="{{ janela|length }}"></td></tr>
+  </tbody>
+  {% for l in g.locais %}
+  <tbody class="bloco-local">
+    <tr class="cab-local"><td class="fixa"><span class="codigo">{{ l.local.location_id }}</span> {{ l.local.descricao }}</td>
+      <td colspan="{{ janela|length }}" class="ajuda">Total Seats: {{ l.local.capacidade or 'sem número — importe o arquivo ou digite em Locais' }}</td></tr>
+    {% for c in l.carteiras %}
+    <tr><td class="fixa recuo">{{ c.nome }}</td>{% for r in c.res %}<td class="num">{{ r }}</td>{% endfor %}</tr>
+    {% else %}
+    <tr><td class="fixa recuo ajuda">nenhuma carteira sua reservada aqui</td><td colspan="{{ janela|length }}"></td></tr>
     {% endfor %}
-    <tr class="subtotal">
-      <td class="fixa">Total {{ g.cidade }}</td>
-      <td class="num">{{ g.totais[0].cap }}</td>
-      {% for t in g.totais %}
-        <td class="num">{{ t.res }}</td>
-        <td class="num {{ 'negativo' if t.disp < 0 }}">{{ t.disp }}</td>
-        <td class="num pct">{{ '—' if t.pct is none else '{:.0%}'.format(t.pct) }}</td>
-      {% endfor %}
-    </tr>
+    <tr class="outras"><td class="fixa recuo">Outras carteiras (não são suas)</td>{% for x in l.meses %}<td class="num">{{ x.outras }}</td>{% endfor %}</tr>
+    {{ linhas_total(l.meses, '') }}
   </tbody>
   {% endfor %}
-
-  <tfoot>
-    <tr>
-      <td class="fixa">TOTAL GERAL</td>
-      <td class="num">{{ totais[0].cap }}</td>
-      {% for t in totais %}
-        <td class="num">{{ t.res }}</td>
-        <td class="num {{ 'negativo' if t.disp < 0 }}">{{ t.disp }}</td>
-        <td class="num pct">{{ '—' if t.pct is none else '{:.0%}'.format(t.pct) }}</td>
-      {% endfor %}
-    </tr>
-  </tfoot>
+  <tbody class="bloco-total">
+    <tr><td class="fixa">TOTAL {{ g.cidade|upper }} — suas carteiras</td>{% for x in g.total %}<td class="num">{{ x.minhas }}</td>{% endfor %}</tr>
+    {{ linhas_total(g.total, ' (todas as carteiras)') }}
+  </tbody>
+  {% endfor %}
+  <tbody class="bloco-total">
+    <tr class="cidade"><td class="fixa">TOTAL GERAL</td><td colspan="{{ janela|length }}"></td></tr>
+    <tr><td class="fixa">Suas carteiras</td>{% for x in totais %}<td class="num">{{ x.minhas }}</td>{% endfor %}</tr>
+    {{ linhas_total(totais, ' (todas as carteiras)') }}
+  </tbody>
 </table>
 </div>
 {% endif %}

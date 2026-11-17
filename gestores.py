@@ -184,31 +184,42 @@ def visao(mes: meses.Mes):
                 "st_ocup": staff_ocup, "st_disp": res_st, "st_pct": _pct(staff_ocup, res_st),
                 "tot_ocup": ag_ocup + staff_ocup, "tot_disp": res_ag + res_st,
             })
-        if not colunas:
-            continue
-        # mesma conta em mais de um prédio vira "CARREFOUR 1", "CARREFOUR 2"...
-        colunas.sort(key=lambda c: (c["conta"], c["location_id"] == forecast.LOCAL_HOME, c["site"]))
-        repetidas = defaultdict(int)
+        # Um quadro por CIDADE dentro de cada gestor (São Paulo, Curitiba, Ponta Grossa...)
+        por_cidade = defaultdict(list)
         for c in colunas:
-            repetidas[c["conta"]] += 1
-        contador = defaultdict(int)
-        for c in colunas:
-            c["tot_pct"] = _pct(c["tot_ocup"], c["tot_disp"])
-            if repetidas[c["conta"]] > 1:
-                contador[c["conta"]] += 1
-                c["titulo"] = f"{c['conta']} {contador[c['conta']]}"
-            else:
-                c["titulo"] = c["conta"]
-
-        total = {k: sum(c[k] for c in colunas) for k in
-                 ("hc", "manha", "tarde", "home", "ag_ocup", "ag_disp", "st_ocup", "st_disp",
-                  "tot_ocup", "tot_disp")}
-        total["staff"] = {k: sum(c["staff"][k] for c in colunas)
-                          for k in [k for k, _ in CATEGORIAS_STAFF] + ["outros"]}
-        for p in ("ag", "st", "tot"):
-            total[f"{p}_pct"] = _pct(total[f"{p}_ocup"], total[f"{p}_disp"])
-        blocos.append({"gerente": gerente, "colunas": colunas, "total": total})
+            por_cidade[banco.cidade(c["location_id"])].append(c)
+        for cidade in por_cidade:
+            blocos.append({"gerente": gerente, "cidade": cidade,
+                           **_quadro(por_cidade[cidade])})
+    # ordem: cidade (São Paulo, Curitiba, Ponta Grossa, Home Office) e depois gestor
+    ordem = banco.ORDEM_CIDADES
+    blocos.sort(key=lambda b: (ordem.index(b["cidade"]) if b["cidade"] in ordem else 99, b["gerente"]))
     return blocos
+
+
+def _quadro(colunas):
+    """Títulos das colunas e a coluna TOTAL de um quadro."""
+    # mesma conta em mais de um prédio vira "CARREFOUR 1", "CARREFOUR 2"...
+    colunas.sort(key=lambda c: (c["conta"], c["location_id"] == forecast.LOCAL_HOME, c["site"]))
+    repetidas = defaultdict(int)
+    for c in colunas:
+        repetidas[c["conta"]] += 1
+    contador = defaultdict(int)
+    for c in colunas:
+        c["tot_pct"] = _pct(c["tot_ocup"], c["tot_disp"])
+        if repetidas[c["conta"]] > 1:
+            contador[c["conta"]] += 1
+            c["titulo"] = f"{c['conta']} {contador[c['conta']]}"
+        else:
+            c["titulo"] = c["conta"]
+    total = {k: sum(c[k] for c in colunas) for k in
+             ("hc", "manha", "tarde", "home", "ag_ocup", "ag_disp", "st_ocup", "st_disp",
+              "tot_ocup", "tot_disp")}
+    total["staff"] = {k: sum(c["staff"][k] for c in colunas)
+                      for k in [k for k, _ in CATEGORIAS_STAFF] + ["outros"]}
+    for p in ("ag", "st", "tot"):
+        total[f"{p}_pct"] = _pct(total[f"{p}_ocup"], total[f"{p}_disp"])
+    return {"colunas": colunas, "total": total}
 
 
 def gerentes():

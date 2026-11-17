@@ -90,8 +90,10 @@ def test_fluxo_completo(cliente, app, tmp_path):
     with app.app_context():
         grupos, totais = banco.ocupacao(janela)
         assert grupos[0]["cidade"] == "Ponta Grossa"
-        cel = grupos[0]["linhas"][0]["celulas"][0]
-        assert (cel["res"], cel["disp"]) == (35, -5)
+        local = grupos[0]["locais"][0]
+        assert local["carteiras"][0]["nome"] == "CLIENTE_A"      # sem forecast: tudo é "meu"
+        mes0 = local["meses"][0]
+        assert (mes0["total"], mes0["disp"]) == (35, -5)
         assert banco.grade_assentos(rid, janela)[1]["dept_name"] == "COGS (SITE) Team Leader Direct"
 
     # painel mostra o negativo em vermelho
@@ -182,7 +184,7 @@ def test_painel_agrupa_por_cidade_e_ignora_locais_que_nao_acompanho(cliente, app
     with app.app_context():
         grupos, _ = banco.ocupacao(meses.janela())
         assert [g["cidade"] for g in grupos] == ["São Paulo", "Curitiba"]
-        assert [l["local"]["location_id"] for g in grupos for l in g["linhas"]] == \
+        assert [l["local"]["location_id"] for g in grupos for l in g["locais"]] == \
             ["BR-SAO-TAGIP", "BR-CUR-JOSEL-01"]
     # não dá para criar reserva num local que não acompanho
     cliente.post("/reservas/nova", data={
@@ -285,3 +287,55 @@ def test_dados_ficam_na_pasta_fixa_e_trazem_os_antigos(tmp_path, monkeypatch):
     (programa / "caminhos.txt").write_text("usuario = Outra\n", encoding="utf-8")
     pastas.trazer_dados_antigos(dados)
     assert "Fulana" in (dados / "caminhos.txt").read_text(encoding="utf-8")
+
+
+def test_carteira_de_casa_nomes_do_cmap_com_as_contas_do_forecast():
+    contas = ["CLIENTE AZUL", "CLIENTE VERDE COBRANÇA", "CLIENTE VERDE EMPRESAS", "LOJA X"]
+    assert banco.carteira_de("CLIENTEAZUL_CO", "", contas) == "CLIENTE AZUL"          # sufixo no CMAP
+    assert banco.carteira_de("CLIENTE VERDE", "P_CD - CLIENTE VERDE EMPRESAS", contas) == \
+        "CLIENTE VERDE EMPRESAS"                                                      # desempata pelo projeto
+    assert banco.carteira_de("CLIENTE VERDE", "P_CLIENTE VERDE RCV", contas) == \
+        "CLIENTE VERDE COBRANÇA"                                                      # sem pista: alfabética
+    assert banco.carteira_de("OUTRO", "LOJA X - Client Co", contas) == "LOJA X"       # pelo projeto
+    assert banco.carteira_de("OUTRO", "P_OUTRO", contas) is None                      # não é minha
+    assert banco.carteira_de("", "Hold reservation", contas) is None                  # sem cliente
+
+
+def test_seats_da_aba_summary(tmp_path):
+    livro = Workbook()
+    aba = livro.active
+    aba.title = "Summary"
+    for linha in [[None, "Brazil Peak Reserved"], [None, "SITE", "Total Seats"], [None, "Barueri", 300],
+                  [None, "TOTAL", 300], [None, "BF4", 2000], [None, "Curitiba CJL2", 1400],
+                  [None, "Curtiba Marechal3", 700], [None, "Capacity / Reserved by site (Domo Data)"],
+                  [None, "Barueri", 999]]:
+        aba.append(linha)
+    caminho = tmp_path / "BRA.xlsx"
+    livro.save(caminho)
+    import planilhas
+    with caminho.open("rb") as f:
+        assert planilhas.ler_seats(f) == {"BR-BAR-ARAGU": 300, "BR-SAO-TAGIP": 2000,
+                                          "BR-CUR-JOSEL-02": 1400, "BR-CUR-MALDE-02": 700}
+
+
+def test_painel_separa_minhas_carteiras_das_outras(cliente, app):
+    with app.app_context():
+        con = banco.db()
+        con.execute("INSERT INTO locais (location_id, descricao, capacidade) VALUES ('BR-PON-RUASE', 'PG', 100)")
+        con.execute("INSERT INTO frentes (lob, conta) VALUES ('F1', 'CLIENTE AZUL')")
+        con.execute("""INSERT INTO frentes_manuais (lob, location_id, carga, mop)
+                       VALUES ('F1', 'BR-PON-RUASE', '7H12', 10)""")
+        for cli, qtd in (("CLIENTEAZUL", 30), ("ESTRANHO", 50)):
+            rid = con.execute("""INSERT INTO reservas (resv_desc, project_id, project_name, cliente,
+                                 location_id, status, criado_em, criado_por) VALUES
+                                 (?, 'P', 'P', ?, 'BR-PON-RUASE', 'Confirmado', '2026-01-01', 'x')""",
+                              (cli, cli)).lastrowid
+            con.execute("INSERT INTO assentos VALUES (?, 'PRODUCAGENT-DIR', '', 'DED', ?, ?)",
+                        (rid, meses.atual().chave, qtd))
+        con.commit()
+        grupos, total = banco.ocupacao(meses.janela())
+        local = grupos[0]["locais"][0]
+        assert [c["nome"] for c in local["carteiras"]] == ["CLIENTE AZUL"]
+        x = local["meses"][0]
+        assert (x["minhas"], x["outras"], x["total"], x["disp"]) == (30, 50, 80, 20)
+        assert [r["cliente"] for r in banco.reservas()] == ["CLIENTEAZUL"]     # Ver reserva: só a minha

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block titulo %}O que subir{% endblock %}
+{% block titulo %}Reserva{% endblock %}
 {% block conteudo %}
-<h1>O que subir no CMAP</h1>
+<h1>Reserva</h1>
 
 {% if not info %}
   <div class="vazio">
@@ -33,11 +33,24 @@
   {% endif %}
 </div>
 
+<form class="formulario linha filtro-cartoes" data-filtro-cartoes>
+  <label>Carteira
+    <select data-filtro-carteira>
+      <option value="">Todas</option>
+      {% for c in carteiras %}<option>{{ c }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Pesquisar <input type="search" data-filtro-texto placeholder="carteira, reserva, MAS, frente..."></label>
+  <span class="contador" data-contador-cartoes></span>
+</form>
+
 {% for i in itens %}
-<section class="cartao {{ 'sem-mudanca' if not i.muda }}">
+<section class="cartao {{ 'sem-mudanca' if not i.muda }}" data-cartao
+         data-carteira="{{ i.carteira }}"
+         data-busca="{{ [i.carteira, i.resv_desc, i.project_id, i.project_name, i.location_id, i.lobs|join(' ')]|join(' ')|lower }}">
   <div class="cartao-topo">
     <div>
-      <b>{{ i.resv_desc }}</b>
+      <span class="etiqueta-carteira">{{ i.carteira }}</span> <b>{{ i.resv_desc }}</b>
       {% if not i.reserva %}<span class="status status-nova">nova no CMAP</span>{% endif %}
       {% if not i.muda %}<span class="status status-confirmado">em dia</span>{% endif %}
       <div class="ajuda">
@@ -68,21 +81,39 @@
       </tr>
     </thead>
     <tbody>
-      {% set linhas_cmp = [('PRODUCAGENT-DIR', 'ag_atual', 'ag_novo')] + ([('TEAMLEADER-DIR', 'st_atual', 'st_novo')] if i.usa_staff else []) %}
-      {% for rotulo, atual, novo in linhas_cmp %}
+      {% set blocos_cmp = [('PRODUCAGENT-DIR (agentes)', 'ag_arq', 'ag_atual', 'ag_novo')] + ([('TEAMLEADER-DIR (staff)', 'st_arq', 'st_atual', 'st_novo')] if i.usa_staff else []) %}
+      {% for rotulo, arq, atual, novo in blocos_cmp %}
+      <tr class="cab-dept"><td colspan="{{ i.meses|length + 1 }}">{{ rotulo }}</td></tr>
+      {% if tem_arquivo %}
+      <tr class="linha-arquivo">
+        <td>Arquivo <span class="ajuda">(último BRA_Distribution importado)</span></td>
+        {% for l in i.meses %}<td class="num">{{ l[arq] }}</td>{% endfor %}
+      </tr>
+      {% endif %}
       <tr class="no-cmap">
-        <td>{{ rotulo }} <span class="ajuda">no CMAP</span></td>
+        <td>No CMAP <span class="ajuda">(controle, com os lançamentos)</span></td>
         {% for l in i.meses %}<td class="num">{{ l[atual] }}</td>{% endfor %}
       </tr>
       <tr>
-        <td>{{ rotulo }} <span class="ajuda">forecast</span></td>
+        <td><b>Forecast</b></td>
+        {% for l in i.meses %}<td class="num"><b>{{ l[novo] }}</b></td>{% endfor %}
+      </tr>
+      <tr class="linha-dif">
+        <td>Diferença Forecast − CMAP <span class="ajuda">(o que subir)</span></td>
         {% for l in i.meses %}
           {% set d = l[novo] - l[atual] %}
-          <td class="num {{ 'sobe' if d > 0 else 'desce' if d < 0 }}">
-            {{ l[novo] }}{% if d %} <small>{{ '▲' if d > 0 else '▼' }}{{ d|abs }}</small>{% endif %}
-          </td>
+          <td class="num {{ 'sobe' if d > 0 else 'desce' if d < 0 }}">{% if d %}{{ '▲' if d > 0 else '▼' }}{{ d|abs }}{% else %}·{% endif %}</td>
         {% endfor %}
       </tr>
+      {% if tem_arquivo %}
+      <tr class="linha-dif">
+        <td>Diferença CMAP − Arquivo <span class="ajuda">(lançado, ainda não no arquivo)</span></td>
+        {% for l in i.meses %}
+          {% set d = l[atual] - l[arq] %}
+          <td class="num {{ 'difere' if d }}">{% if d %}{{ '+' if d > 0 }}{{ d }}{% else %}·{% endif %}</td>
+        {% endfor %}
+      </tr>
+      {% endif %}
       {% endfor %}
     </tbody>
   </table>

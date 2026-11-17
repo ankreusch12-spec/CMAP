@@ -10,7 +10,10 @@ Tabelas (mesmos nomes de campos do CMAP):
   assentos  -> aba "Assentos" de cada reserva (Dept Code x mês)
   historico -> quem mudou o quê e quando (bom para auditoria)
 """
+import re
 import sqlite3
+import unicodedata
+from collections import defaultdict
 from datetime import datetime
 
 from flask import current_app, g
@@ -58,6 +61,57 @@ LOCAIS_CMAP = [
     ("BR-WFH-DIRETO", "BWD", "WAH Brasil Direto WFH"),
     ("BR-WFH-INDIR", "", "Trabalho Remoto - Indireto"),
 ]
+
+# ---------------------------------------------------------------- minhas carteiras
+# As carteiras que EU cuido = as CONTAs do forecast + as incluídas à mão em Frentes.
+# (Nenhum nome de cliente fica no código.) O resto do CMAP (outras carteiras do prédio)
+# é ignorado no Painel, na Reserva, em Gestores e em Ver reserva.
+
+def _limpo(texto) -> str:
+    """'P_CLARO COBRANCA_CWB' -> 'CLAROCOBRANCACWB' (sem acento, espaço e o P_ do começo)."""
+    t = unicodedata.normalize("NFKD", str(texto or "")).encode("ascii", "ignore").decode().upper().strip()
+    t = re.sub(r"^P_", "", t)
+    return re.sub(r"[^A-Z0-9]", "", t)
+
+
+def minhas_carteiras() -> list[str]:
+    """Contas do forecast e das carteiras manuais (guardado por requisição)."""
+    if "carteiras" not in g:
+        g.carteiras = [r["conta"] for r in db().execute(
+            """SELECT DISTINCT conta FROM frentes WHERE conta != '' AND (
+                 EXISTS (SELECT 1 FROM forecast f WHERE f.lob = frentes.lob)
+                 OR EXISTS (SELECT 1 FROM frentes_manuais m WHERE m.lob = frentes.lob))
+               ORDER BY conta""")]
+    return g.carteiras
+
+
+def carteira_de(cliente, projeto="", carteiras=None) -> str | None:
+    """
+    Qual das minhas carteiras é esta reserva do CMAP? None = não é minha.
+    Compara o começo dos nomes, sem espaço/acento:
+      cliente 'NATURA_CO' -> NATURA · 'NIOTELECOM' -> NIO · 'VIAVAREJO' -> VIA VAREJO
+      cliente 'CLARO' combina com CLARO COBRANÇA e CLARO EMPRESAS: desempata pelo projeto
+      ('P_CD - CLARO EMPRESAS' -> CLARO EMPRESAS); sem pista, fica a primeira em ordem alfabética.
+    Sem forecast ainda (lista vazia): tudo conta como meu.
+    """
+    carteiras = minhas_carteiras() if carteiras is None else carteiras
+    if not carteiras:
+        return str(cliente or projeto or "(sem cliente)")
+    cli, proj = _limpo(cliente), _limpo(projeto)
+    candidatas = []
+    for nome in carteiras:
+        c = _limpo(nome)
+        if not c:
+            continue
+        if (cli and (cli.startswith(c) or (len(cli) >= 3 and c.startswith(cli)))) or \
+                (proj and proj.startswith(c)):
+            candidatas.append(nome)
+    if len(candidatas) > 1:
+        # desempate: a carteira cujo nome inteiro aparece no projeto
+        no_projeto = [n for n in candidatas if _limpo(n) in proj]
+        candidatas = no_projeto or sorted(candidatas)
+    return candidatas[0] if candidatas else None
+
 
 # Alguns relatórios do CMAP usam outro código para o mesmo local.
 # Código do relatório -> código da tela "Disponibilidade de locais".
@@ -124,6 +178,16 @@ CREATE TABLE IF NOT EXISTS frentes (
     project_name  TEXT NOT NULL DEFAULT '',
     cliente       TEXT NOT NULL DEFAULT '',
     gerencia      TEXT NOT NULL DEFAULT ''  -- gestor (coluna GERENCIA do forecast)
+);
+
+-- O que veio no último arquivo do CMAP importado (para comparar com o controle).
+CREATE TABLE IF NOT EXISTS cmap_arquivo (
+    project_id   TEXT NOT NULL,
+    location_id  TEXT NOT NULL,
+    dept_code    TEXT NOT NULL,
+    mes          TEXT NOT NULL,
+    qtd          INTEGER NOT NULL,
+    PRIMARY KEY (project_id, location_id, dept_code, mes)
 );
 
 -- Carteiras ativas que NÃO estão no forecast (incluídas à mão em Frentes).
@@ -205,6 +269,7 @@ CREATE TABLE IF NOT EXISTS historico (
 def conectar(caminho: str) -> sqlite3.Connection:
     con = sqlite3.connect(caminho)
     con.row_factory = sqlite3.Row          # permite usar linha["coluna"]
+
     con.execute("PRAGMA foreign_keys = ON")
     return con
 
@@ -296,7 +361,9 @@ def reservas(mostrar_tudo: bool = False):
     if not mostrar_tudo:
         sql += " AND r.status != 'Cancelado'"
     sql += " ORDER BY r.criado_em DESC, r.id DESC"
-    return db().execute(sql).fetchall()
+    # só as minhas carteiras (pelo cliente ou pelo nome do projeto)
+    return [r for r in db().execute(sql).fetchall()
+            if carteira_de(r["cliente"], r["project_name"])]
 
 
 def reserva(reserva_id: int):
@@ -327,49 +394,64 @@ def grade_assentos(reserva_id: int, janela: list[meses.Mes]):
 
 def ocupacao(janela: list[meses.Mes]):
     """
-    Painel: para cada local e mês -> reservado, disponível e % ocupação,
-    agrupado por cidade com subtotal (igual à aba Summary da planilha).
-    Mesma conta da planilha: Avai = Total Seats - Res.
-
-    Devolve (grupos, total_geral):
-      grupos = [{"cidade": "Curitiba", "linhas": [...], "totais": [...]}, ...]
+    Painel: para cada local (agrupado por cidade), mês a mês:
+      - uma linha por carteira MINHA (reservado no CMAP);
+      - "Outras carteiras": o resto do prédio (não é meu, mas ocupa lugar);
+      - Total reservado, Total Seats (do arquivo) e Disponível = Seats − Total.
+    Status que contam: Confirmado e Fila mensal.
+    Devolve (grupos, total_geral) com grupos = [{"cidade", "locais": [...], "total"}].
     """
     marcas = ",".join("?" * len(STATUS_QUE_OCUPAM))
     somas = db().execute(f"""
-        SELECT r.location_id, a.mes, SUM(a.qtd) AS total
+        SELECT r.location_id, r.cliente, r.project_name, a.mes, SUM(a.qtd) AS total
         FROM assentos a JOIN reservas r ON r.id = a.reserva_id
         WHERE r.status IN ({marcas})
-        GROUP BY r.location_id, a.mes""", STATUS_QUE_OCUPAM).fetchall()
-    reservado = {(s["location_id"], s["mes"]): s["total"] for s in somas}
+        GROUP BY r.location_id, r.cliente, r.project_name, a.mes""", STATUS_QUE_OCUPAM).fetchall()
+    minhas = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))   # local -> carteira -> mês
+    outras = defaultdict(lambda: defaultdict(int))                        # local -> mês
+    for s in somas:
+        cart = carteira_de(s["cliente"], s["project_name"])     # sem cliente vai p/ "outras"
+        if cart:
+            minhas[s["location_id"]][cart][s["mes"]] += s["total"]
+        else:
+            outras[s["location_id"]][s["mes"]] += s["total"]
 
     grupos: dict[str, dict] = {}
-    geral = _totais_vazios(janela)
+    geral = _vazio(janela)
     for local in locais(somente_ativos=True):
-        cap = local["capacidade"]
-        celulas = []
-        for m in janela:
-            res = reservado.get((local["location_id"], m.chave), 0)
-            celulas.append({"res": res,
-                            "disp": cap - res if cap else None,
-                            "pct": res / cap if cap else None})
-        grupo = grupos.setdefault(cidade(local["location_id"]), {
-            "cidade": cidade(local["location_id"]), "linhas": [],
-            "totais": _totais_vazios(janela)})
-        grupo["linhas"].append({"local": local, "celulas": celulas})
-        if cap:                              # só soma no total quem tem capacidade
-            for i, c in enumerate(celulas):
-                for t in (grupo["totais"][i], geral[i]):
-                    t["cap"] += cap
-                    t["res"] += c["res"]
-
-    for t in [*geral, *(t for g in grupos.values() for t in g["totais"])]:
-        t["disp"] = t["cap"] - t["res"]
-        t["pct"] = t["res"] / t["cap"] if t["cap"] else None
+        loc, seats = local["location_id"], local["capacidade"]
+        carteiras = [{"nome": nome, "res": [por_mes.get(m.chave, 0) for m in janela]}
+                     for nome, por_mes in sorted(minhas[loc].items())]
+        meses_local = []
+        for i, m in enumerate(janela):
+            mi = sum(c["res"][i] for c in carteiras)
+            ou = outras[loc].get(m.chave, 0)
+            meses_local.append({"minhas": mi, "outras": ou, "total": mi + ou, "seats": seats})
+        info = {"local": local, "carteiras": carteiras, "meses": meses_local}
+        _completar(info["meses"])
+        cidade_local = cidade(loc)
+        grupo = grupos.setdefault(cidade_local, {"cidade": cidade_local, "locais": [],
+                                                 "total": _vazio(janela)})
+        grupo["locais"].append(info)
+        for alvo in (grupo["total"], geral):
+            for i, x in enumerate(meses_local):
+                for k in ("minhas", "outras", "total", "seats"):
+                    alvo[i][k] += x[k]
+    for g in grupos.values():
+        _completar(g["total"])
+    _completar(geral)
     return list(grupos.values()), geral
 
 
-def _totais_vazios(janela):
-    return [{"cap": 0, "res": 0} for _ in janela]
+def _vazio(janela):
+    return [{"minhas": 0, "outras": 0, "total": 0, "seats": 0} for _ in janela]
+
+
+def _completar(lista):
+    """Disponível e % de ocupação (só onde há Total Seats)."""
+    for x in lista:
+        x["disp"] = x["seats"] - x["total"] if x["seats"] else None
+        x["pct"] = x["total"] / x["seats"] if x["seats"] else None
 
 
 def historico(limite: int = 300):

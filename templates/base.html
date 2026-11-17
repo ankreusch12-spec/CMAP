@@ -17,7 +17,7 @@
     <nav>
       {% set ep = request.endpoint or '' %}
       <a href="{{ url_for('painel') }}" class="{{ 'ativo' if ep == 'painel' }}">Painel</a>
-      <a href="{{ url_for('o_que_subir') }}" class="{{ 'ativo' if ep == 'o_que_subir' }}">O que subir</a>
+      <a href="{{ url_for('o_que_subir') }}" class="{{ 'ativo' if ep == 'o_que_subir' }}">Reserva</a>
       <a href="{{ url_for('visao_gestores') }}" class="{{ 'ativo' if ep == 'visao_gestores' }}">Gestores</a>
       <a href="{{ url_for('reservas') }}" class="{{ 'ativo' if 'reserva' in ep }}">Ver reserva</a>
       <a href="{{ url_for('frentes') }}" class="{{ 'ativo' if ep == 'frentes' }}">Frentes</a>

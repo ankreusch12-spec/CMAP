@@ -8,7 +8,33 @@ document.addEventListener("DOMContentLoaded", () => {
   confirmacoes();
   gradeDeAssentos();
   autoEnviar();
+  filtroDeCartoes();
 });
+
+// 6) Tela Reserva: filtra os cartões por carteira e por texto.
+function filtroDeCartoes() {
+  const form = document.querySelector("[data-filtro-cartoes]");
+  if (!form) return;
+  const carteira = form.querySelector("[data-filtro-carteira]");
+  const texto = form.querySelector("[data-filtro-texto]");
+  const contador = form.querySelector("[data-contador-cartoes]");
+  const cartoes = [...document.querySelectorAll("[data-cartao]")];
+  const filtrar = () => {
+    const c = carteira.value;
+    const t = texto.value.trim().toLowerCase();
+    let visiveis = 0;
+    cartoes.forEach((cartao) => {
+      const ok = (!c || cartao.dataset.carteira === c) && (!t || cartao.dataset.busca.includes(t));
+      cartao.hidden = !ok;
+      if (ok) visiveis++;
+    });
+    contador.textContent = `${visiveis} de ${cartoes.length} reserva(s)`;
+  };
+  form.addEventListener("submit", (e) => e.preventDefault());
+  carteira.addEventListener("change", filtrar);
+  texto.addEventListener("input", filtrar);
+  filtrar();
+}
 
 // 5) Filtros que se aplicam sozinhos ao trocar a opção (tela Gestores).
 function autoEnviar() {

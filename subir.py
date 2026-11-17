@@ -1,5 +1,5 @@
 """
-subir.py — "O que subir no CMAP".
+subir.py — tela "Reserva" (o que subir no CMAP).
 
 Compara, para cada reserva (MAS + local) e cada mês:
     o que está no controle (= o que já está lançado no CMAP)
@@ -156,6 +156,7 @@ def itens(janela: list[meses.Mes]):
     """
     calculado = forecast.calcular(frentes_salvas(), de_para(), janela, _acompanho())
     locais = {l["location_id"]: l for l in banco.locais()}
+    arquivo = _do_arquivo()
     lista = []
     for (project_id, location_id), b in calculado.items():
         reserva = _reserva_do_controle(project_id, location_id)
@@ -169,8 +170,12 @@ def itens(janela: list[meses.Mes]):
             st_a = atual.get(forecast.DEPT_STAFF, {}).get(m.chave, 0)
             ag_n = b["agentes"].get(m.chave, 0)
             st_n = b["staff"].get(m.chave, 0) if usa_staff else st_a
+            arq = arquivo.get((project_id, location_id, m.chave), {})
             linhas.append({"mes": m, "ag_atual": ag_a, "ag_novo": ag_n,
                            "st_atual": st_a, "st_novo": st_n,
+                           # como veio no último arquivo do CMAP importado
+                           "ag_arq": arq.get(forecast.DEPT_AGENTE, 0),
+                           "st_arq": arq.get(forecast.DEPT_STAFF, 0),
                            "muda": (ag_a, st_a) != (ag_n, st_n)})
         lista.append({
             "project_id": project_id, "location_id": location_id,
@@ -180,12 +185,25 @@ def itens(janela: list[meses.Mes]):
             "project_name": (reserva["project_name"] if reserva else
                              b["info"].get("project_name") or project_id),
             "lobs": sorted(b["lobs"]),
+            "carteira": b["info"].get("conta") or b["info"].get("cliente") or "",
             "meses": linhas,
             "usa_staff": usa_staff,
             "muda": any(l["muda"] for l in linhas),
         })
     lista.sort(key=lambda i: (not i["muda"], banco.cidade(i["location_id"]), i["resv_desc"]))
     return lista
+
+
+def _do_arquivo():
+    """{(MAS, local, mês): {dept: qtd}} do último arquivo do CMAP importado."""
+    foto = defaultdict(dict)
+    for r in banco.db().execute("SELECT * FROM cmap_arquivo"):
+        foto[(r["project_id"], r["location_id"], r["mes"])][r["dept_code"]] = r["qtd"]
+    return foto
+
+
+def tem_arquivo() -> bool:
+    return bool(banco.db().execute("SELECT 1 FROM cmap_arquivo LIMIT 1").fetchone())
 
 
 def pendencias_de_para():
@@ -214,7 +232,7 @@ def lancar(project_id: str, location_id: str, janela: list[meses.Mes]) -> str | 
         reserva_id = reserva["id"]
     else:
         info = de_para()
-        cliente = next((info[l]["cliente"] or info[l]["conta"] for l in item["lobs"] if l in info), "")
+        cliente = next((info[l]["conta"] or info[l]["cliente"] for l in item["lobs"] if l in info), "")
         reserva_id = con.execute(
             """INSERT INTO reservas (resv_desc, project_id, project_name, cliente, location_id,
                                      status, criado_em, criado_por)

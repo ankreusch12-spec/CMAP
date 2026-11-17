@@ -97,6 +97,46 @@ def ler(arquivo, somente_pais: str | None = "Brazil"):
         "ou um arquivo exportado por este controle.")
 
 
+# Nome do site na aba Summary da BRA_Distribution_Capacity -> Location ID
+# (comparação sem espaço e sem maiúscula: "Curitiba CJL2" -> "curitibacjl2").
+SITES_SUMMARY = [
+    ("barueri", "BR-BAR-ARAGU"), ("bf4", "BR-SAO-TAGIP"), ("cjl1", "BR-CUR-JOSEL-01"),
+    ("cjl2", "BR-CUR-JOSEL-02"), ("cjl3", "BR-CUR-JOSEL-03"), ("marechal2", "BR-CUR-MALDE-01"),
+    ("marechal3", "BR-CUR-MALDE-02"), ("pontagrossa", "BR-PON-RUASE"),
+]
+
+
+def ler_seats(arquivo) -> dict:
+    """
+    Total Seats de cada prédio na aba Summary da BRA_Distribution_Capacity
+    (colunas SITE e Total Seats). Devolve {location_id: seats}; {} se não tiver a aba.
+    """
+    if hasattr(arquivo, "seek"):
+        arquivo.seek(0)
+    try:
+        livro = load_workbook(arquivo, read_only=True, data_only=True)
+    except Exception:
+        return {}
+    seats = {}
+    try:
+        aba = next((a for a in livro.worksheets if a.title.strip().lower() == "summary"), None)
+        if aba is None:
+            return {}
+        for linha in aba.iter_rows(max_col=3, values_only=True):
+            nome = str(linha[1] or "").lower().replace(" ", "") if len(linha) > 1 else ""
+            if "capacity/reserved" in nome:          # começa o bloco do Domo: para aqui
+                break
+            valor = linha[2] if len(linha) > 2 else None
+            if not nome or not isinstance(valor, (int, float)) or nome.startswith("total"):
+                continue
+            for trecho, location_id in SITES_SUMMARY:
+                if trecho in nome and location_id not in seats:
+                    seats[location_id] = int(valor)
+    finally:
+        livro.close()
+    return seats
+
+
 def _limpar(mapa, valores_por_linha, primeira: int, somente_pais, origem="Linha"):
     """Transforma cada linha bruta num dict limpo; linhas com problema viram aviso."""
     linhas, avisos = [], []
@@ -208,6 +248,14 @@ def gravar(linhas, usuario: str):
                DO UPDATE SET qtd = excluded.qtd""",
             (ids[chave_res], dept, info[("dept", dept)], shift, mes, qtd))
         resumo["valores"] += 1
+
+    # Guarda "como veio no arquivo" para a tela Reserva comparar Arquivo × CMAP × Forecast.
+    con.execute("DELETE FROM cmap_arquivo")
+    foto = defaultdict(int)
+    for (chave_res, dept, _shift, mes), qtd in somado.items():
+        foto[(chave_res[0], info[chave_res]["location_id"], dept, mes)] += qtd
+    con.executemany("INSERT INTO cmap_arquivo (project_id, location_id, dept_code, mes, qtd) "
+                    "VALUES (?, ?, ?, ?, ?)", [(*k, q) for k, q in foto.items()])
 
     banco.registrar("Importação", f"{resumo['reservas']} reservas novas, "
                     f"{resumo['locais']} locais novos, {resumo['valores']} valores, "

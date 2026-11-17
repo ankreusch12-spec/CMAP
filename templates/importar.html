@@ -7,7 +7,7 @@
 <div class="cartao">
   {% if caminho %}
     <p><b>Ligado ao arquivo</b> (caminhos.txt): <code>{{ caminho }}</code></p>
-    <p class="ajuda">Toda vez que você abre <i>O que subir</i>, <i>Gestores</i> ou <i>Frentes</i>, o controle
+    <p class="ajuda">Toda vez que você abre <i>Reserva</i>, <i>Gestores</i> ou <i>Frentes</i>, o controle
       confere se o forecast mudou e lê de novo sozinho.
       {% if info %}Último lido: <b>{{ info.arquivo }}</b> em {{ info.importado_em }}.{% endif %}</p>
     <form method="post" action="{{ url_for('atualizar_forecast') }}">
@@ -29,7 +29,7 @@
 <p class="ajuda">
   Envie o <b>FORECAST OFICIAL - OUTBOUND</b>. O controle lê a aba <code>BASE</code> (MOP, Home, Staff
   e a carga 6H20/7H12 de cada frente), substitui o forecast anterior e mostra em
-  <a href="{{ url_for('o_que_subir') }}">O que subir</a> a diferença para o que está no CMAP.
+  <a href="{{ url_for('o_que_subir') }}">Reserva</a> a diferença para o que está no CMAP.
 </p>
 <form method="post" action="{{ url_for('importar_forecast') }}" enctype="multipart/form-data" class="formulario">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
