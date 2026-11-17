@@ -23,8 +23,10 @@ PROX = MES.somar(1)
 def forecast_ficticio(caminho):
     """Monta uma aba BASE no formato do FORECAST OFICIAL com 3 frentes fictícias."""
     livro = Workbook()
-    aba = livro.active
-    aba.title = "BASE"
+    livro.active.title = "OBS"                       # aba qualquer antes da tabela
+    aba = livro.create_sheet("Forecast Novo")        # nome diferente de BASE
+    aba.append(["FORECAST OFICIAL - título em cima"])
+    aba.append([])
     aba.append(["GERENCIA", "CODIGO / ACT ID", "CARGA", "CONTA", "SITE", "ACT ID/ INTEGRATION",
                 "ACT ID / CARTEIRA", "ENDEREÇO INTEGRATION", "ANDAR", "Act ID", "LOB WFM", "DADO",
                 MES.primeiro_dia, "W-45", PROX.primeiro_dia])
@@ -141,7 +143,7 @@ def test_forecast_sem_aba_base(cliente, tmp_path):
     with caminho.open("rb") as f:
         r = cliente.post("/importar/forecast", data={"csrf_token": cliente.token, "arquivo": (f, "x.xlsx")},
                          content_type="multipart/form-data", follow_redirects=True)
-    assert "aba BASE" in r.get_data(as_text=True)
+    assert "Não encontrei o forecast" in r.get_data(as_text=True)
 
 
 def test_visao_por_gestor(cliente, app, tmp_path):

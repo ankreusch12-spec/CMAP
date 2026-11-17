@@ -4,12 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titulo %}Controle CMAP{% endblock %} · Controle CMAP</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='marca/icone.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='estilo.css') }}">
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
 <body>
   <header class="topo">
-    <span class="marca">Controle CMAP</span>
+    <a class="marca" href="{{ url_for('painel') }}">
+      <img src="{{ url_for('static', filename='marca/concentrix-branco.svg') }}" alt="Concentrix">
+      <span>Controle CMAP</span>
+    </a>
     <nav>
       {% set ep = request.endpoint or '' %}
       <a href="{{ url_for('painel') }}" class="{{ 'ativo' if ep == 'painel' }}">Painel</a>

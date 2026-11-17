@@ -93,6 +93,27 @@ def _numero(valor) -> float:
 
 # ================================================================ LER
 
+OBRIGATORIAS = {"lob wfm", "dado", "endereco integration"}
+LINHAS_CABECALHO = 60
+
+
+def _achar_cabecalho(livro):
+    """
+    Procura a linha de cabeçalho (LOB WFM, DADO, ENDEREÇO INTEGRATION) em qualquer
+    aba, nas 60 primeiras linhas — começando pela aba BASE. Assim o arquivo pode
+    mudar de nome, de aba ou ganhar linhas de título em cima sem quebrar a leitura.
+    Devolve (iterador das linhas seguintes, cabeçalho normalizado).
+    """
+    abas = sorted(livro.worksheets, key=lambda a: a.title.strip().upper() != "BASE")
+    for aba in abas:
+        linhas = aba.iter_rows(values_only=True)
+        for _n, linha in zip(range(LINHAS_CABECALHO), linhas):
+            cab = [normalizar(c) if not isinstance(c, datetime) else c for c in linha]
+            if OBRIGATORIAS <= set(c for c in cab if isinstance(c, str)):
+                return linhas, cab
+    raise ErroForecast("Não encontrei o forecast: nenhuma aba tem as colunas LOB WFM, DADO e "
+                       "ENDEREÇO INTEGRATION nas primeiras 60 linhas (normalmente fica na aba BASE).")
+
 def ler(arquivo):
     """
     Lê a aba BASE e devolve (frentes, avisos).
@@ -104,15 +125,10 @@ def ler(arquivo):
     except Exception as erro:
         raise ErroForecast("Não consegui abrir o arquivo. Ele é um .xlsx válido?") from erro
     try:
-        if "BASE" not in livro.sheetnames:
-            raise ErroForecast("Não encontrei a aba BASE do forecast.")
-        linhas = livro["BASE"].iter_rows(values_only=True)
-        cab = [normalizar(c) if not isinstance(c, datetime) else c for c in next(linhas)]
+        linhas, cab = _achar_cabecalho(livro)
         col = {nome: cab.index(nome) for nome in
                ("lob wfm", "dado", "endereco integration", "andar", "conta", "act id", "gerencia")
                if nome in cab}
-        if {"lob wfm", "dado", "endereco integration"} - col.keys():
-            raise ErroForecast("A aba BASE não tem as colunas LOB WFM, DADO e ENDEREÇO INTEGRATION.")
         # colunas de mês = cabeçalhos que são datas (as semanas W-45... são ignoradas)
         col_meses = {i: meses.de_valor(c).chave for i, c in enumerate(cab) if isinstance(c, datetime)}
 

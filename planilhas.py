@@ -211,8 +211,8 @@ def _aba(livro, titulo, cabecalho, linhas, primeira=False):
     aba.title = titulo
     aba.append(cabecalho)
     for c in aba[1]:
-        c.font = Font(bold=True)
-        c.fill = PatternFill("solid", fgColor="C9C9F0")
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="003D5B")      # Unifying Blue (Concentrix)
     for linha in linhas:
         aba.append([_texto(v) for v in linha])
     for i, nome in enumerate(cabecalho, start=1):

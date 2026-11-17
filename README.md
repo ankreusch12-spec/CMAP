@@ -131,3 +131,9 @@ templates/        HTML de cada tela
 static/           estilo (CSS) e JavaScript
 tests/            testes automáticos  ->  python -m pytest
 ```
+
+## Identidade visual
+
+Cores oficiais da Concentrix (arquivo `CNX_RGB+Tints.ase`), definidas como variáveis no topo de
+`static/estilo.css` (`--cnx-azul`, `--cnx-jade`, `--cnx-seafoam`...). Logo branco (`CNX_Reverse_RGB.svg`)
+e ícone em `static/marca/`. Funciona no tema claro e no escuro do sistema.
